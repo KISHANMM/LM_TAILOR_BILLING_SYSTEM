@@ -116,14 +116,18 @@ export default function NewOrder({ onMenuClick, auth }) {
 
     // Auto-search when 10 digits are entered
     useEffect(() => {
+        console.log('Phone number changed:', customer.phone_number, 'Length:', customer.phone_number.length, 'Found:', customerFound);
         if (customer.phone_number.length === 10 && !customerFound) {
+            console.log('Triggering auto-search...');
             handlePhoneSearch(true);
         } else if (customer.phone_number.length < 10 && customerFound) {
-            // Reset if user deletes digits
+            console.log('Resetting customer found (number short)');
             setCustomerFound(false);
             setCustomerId(null);
+            // Optional: reset name if it was prefilled and now user is typing a new number
+            // setCustomer(c => ({ ...c, name: '' }));
         }
-    }, [customer.phone_number]);
+    }, [customer.phone_number, customerFound]);
 
     // ── Service helpers ───────────────────────────────
     function addService() { setServices(s => [...s, initialService()]); }
