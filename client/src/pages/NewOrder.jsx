@@ -105,10 +105,10 @@ export default function NewOrder({ onMenuClick, auth }) {
             } else {
                 setCustomerFound(false);
                 setCustomerId(null);
-                if (!isAuto) toast('New customer — fill in the details below', { icon: '👤' });
+                toast('New customer — fill in the details below', { icon: '👤' });
             }
         } catch {
-            if (!isAuto) toast.error('Search failed');
+            toast.error('Search failed');
         } finally {
             setSearchLoading(false);
         }
