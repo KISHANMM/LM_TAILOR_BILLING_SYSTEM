@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, ChevronDown, User, Ruler, Scissors, CreditCard, Search, Menu, Image as ImageIcon, Camera, X, Mic, Square, Trash, PenTool } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import ScratchPad from '../components/ScratchPad';
+import { saveOfflineOrder } from '../utils/offlineStore';
 
 const SERVICE_TYPES = ['Blouse', 'Dress', 'Lehenga', 'Chudi', 'Alteration', 'Pico', 'Fall', 'Gonda', 'Krosha Work', 'Other'];
 
@@ -83,9 +84,9 @@ export default function NewOrder({ onMenuClick, auth }) {
     const balance = totalAmount - advance;
 
     // ── Customer lookup ───────────────────────────────
-    async function handlePhoneSearch() {
+    async function handlePhoneSearch(isAuto = false) {
         if (!customer.phone_number || customer.phone_number.length < 10) {
-            toast.error('Enter a valid 10-digit phone number');
+            if (!isAuto) toast.error('Enter a valid 10-digit phone number');
             return;
         }
         setSearchLoading(true);
@@ -104,14 +105,25 @@ export default function NewOrder({ onMenuClick, auth }) {
             } else {
                 setCustomerFound(false);
                 setCustomerId(null);
-                toast('New customer — fill in the details below', { icon: '👤' });
+                if (!isAuto) toast('New customer — fill in the details below', { icon: '👤' });
             }
         } catch {
-            toast.error('Search failed');
+            if (!isAuto) toast.error('Search failed');
         } finally {
             setSearchLoading(false);
         }
     }
+
+    // Auto-search when 10 digits are entered
+    useEffect(() => {
+        if (customer.phone_number.length === 10 && !customerFound) {
+            handlePhoneSearch(true);
+        } else if (customer.phone_number.length < 10 && customerFound) {
+            // Reset if user deletes digits
+            setCustomerFound(false);
+            setCustomerId(null);
+        }
+    }, [customer.phone_number]);
 
     // ── Service helpers ───────────────────────────────
     function addService() { setServices(s => [...s, initialService()]); }
@@ -238,12 +250,56 @@ export default function NewOrder({ onMenuClick, auth }) {
             }
         }
 
+        const isOffline = !navigator.onLine;
+        
+        // Prepare data payloads
+        const measPayload = {};
+        MEASUREMENT_FIELDS.forEach(f => { if (measurements[f.key]) measPayload[f.key] = parseFloat(measurements[f.key]); });
+
+        const svcList = services.map(s => ({
+            service_type: s.service_type === 'Other' ? (s.custom_type || 'Other') : s.service_type,
+            quantity: parseInt(s.quantity) || 1,
+            price: parseFloat(s.price),
+        }));
+
+        const orderPayload = {
+            booking_date: bookingDate,
+            delivery_date: deliveryDate,
+            advance_paid: advance,
+            notes: customer.notes || '',
+            measurement_type: measurementType,
+            services: svcList,
+            assigned_worker: assignedWorker,
+            payment_method: paymentMethod,
+        };
+
+        if (isOffline) {
+            setLoading(true);
+            try {
+                const audioData = audioBlob ? await blobToBase64(audioBlob) : null;
+                const offlineData = {
+                    customer: { name: customer.name, phone_number: customer.phone_number },
+                    measPayload,
+                    orderPayload,
+                    images: images.length > 0 ? images : [],
+                    audioData,
+                    recordingTime: audioBlob ? recordingTime : null
+                };
+
+                await saveOfflineOrder(offlineData);
+                toast.success('Offline mode: Order saved locally! It will sync when internet is back.', { duration: 5000 });
+                navigate('/');
+            } catch (err) {
+                toast.error('Failed to save offline order');
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
         setLoading(true);
         try {
             // Create / lookup customer
-            const measPayload = {};
-            MEASUREMENT_FIELDS.forEach(f => { if (measurements[f.key]) measPayload[f.key] = parseFloat(measurements[f.key]); });
-
             const custRes = await api.post('/customers', {
                 name: customer.name,
                 phone_number: customer.phone_number,
@@ -251,24 +307,12 @@ export default function NewOrder({ onMenuClick, auth }) {
             });
             const cid = custRes.data.id;
 
-            // Build services list
-            const svcList = services.map(s => ({
-                service_type: s.service_type === 'Other' ? (s.custom_type || 'Other') : s.service_type,
-                quantity: parseInt(s.quantity) || 1,
-                price: parseFloat(s.price),
-            }));
+            const finalOrderPayload = {
+                ...orderPayload,
+                customer_id: cid
+            };
 
-            const orderRes = await api.post('/orders', {
-                customer_id: cid,
-                booking_date: bookingDate,
-                delivery_date: deliveryDate,
-                advance_paid: advance,
-                notes: customer.notes || '',
-                measurement_type: measurementType,
-                services: svcList,
-                assigned_worker: assignedWorker,
-                payment_method: paymentMethod,
-            });
+            const orderRes = await api.post('/orders', finalOrderPayload);
             const createdOrderId = orderRes.data.order_id;
 
             // Upload images if any
