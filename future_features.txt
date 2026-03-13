@@ -1,0 +1,18 @@
+# Future Features to Implement
+
+As requested by the user, these following features should be implemented in the future when asked:
+
+1. **Dual-Interface Access (Owner vs. Worker)**:
+   - Separate login/interface for Owners and Workers.
+   - Owner sees the current full app (billing, orders, analytics, income/expenses, etc.).
+   - Workers can only see the customer name, measurements, and delivery date for their assigned orders.
+
+2. **Automated WhatsApp Reminders**:
+   - Send automatic WhatsApp messages to customers when their order status is changed to "Ready".
+
+3. **Advanced Interactive Analytics**:
+   - Implement deeper insights, such as Top Services (e.g., Saree Fall, Bridal Blouse) that generate the most revenue.
+   - Customer retention and loyalty tracking (identifying top customers).
+   - Export data functionality (e.g., PDF or Excel files of monthly income/expenses).
+
+*(Note: Digital Catalog & Inspiration Gallery is already implemented in the 'exquisite tailoring app' catalog).*
