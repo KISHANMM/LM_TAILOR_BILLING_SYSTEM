@@ -13,6 +13,8 @@ import WorkerDashboard from './pages/WorkerDashboard';
 import Profits from './pages/Profits';
 import './index.css';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import useOfflineSync from './hooks/useOfflineSync';
+import { WifiOff, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [sidebarOpen, useState_sidebarOpen] = useState(false);
@@ -25,22 +27,7 @@ export default function App() {
     updateServiceWorker,
   } = useRegisterSW();
 
-  useEffect(() => {
-    const handleOffline = () => {
-      toast.error('You are offline. Changes will save locally and sync when reconnected.', { duration: 6000, id: 'net' });
-    };
-    const handleOnline = () => {
-      toast.success('Back online! Syncing background changes...', { id: 'net' });
-    };
-
-    window.addEventListener('offline', handleOffline);
-    window.addEventListener('online', handleOnline);
-
-    return () => {
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('online', handleOnline);
-    };
-  }, []);
+  const { isOnline, isSyncing, syncOfflineOrders } = useOfflineSync();
 
   if (!auth) {
     return (
@@ -61,6 +48,16 @@ export default function App() {
     <BrowserRouter>
       <Toaster position="top-center" />
       <div className={`app-layout ${sidebarOpen ? 'sidebar-open' : ''}`}>
+        {!isOnline && (
+          <div className="offline-banner">
+            <WifiOff size={16} />
+            <span>Working Offline - Orders saving locally</span>
+            <button onClick={syncOfflineOrders} disabled={isSyncing} className="sync-btn">
+              <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+              {isSyncing ? 'Syncing...' : 'Sync Now'}
+            </button>
+          </div>
+        )}
         <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} auth={auth} setAuth={setAuth} />
 
         {/* Mobile Overlay */}

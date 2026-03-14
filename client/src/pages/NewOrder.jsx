@@ -494,7 +494,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                                                 <span className="prefix-symbol" style={{ fontSize: 11, padding: '10px 8px' }}>inches</span>
                                                 <input
                                                     type="number"
-                                                    step="0.5"
+                                                    step="any"
                                                     min="0"
                                                     value={measurements[f.key]}
                                                     onChange={e => setMeasurements(m => ({ ...m, [f.key]: e.target.value }))}

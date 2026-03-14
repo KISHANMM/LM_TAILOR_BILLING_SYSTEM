@@ -33,7 +33,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
-            urlPattern: /^https?:\/\/localhost:5000\/api\/.*$/i,
+            urlPattern: ({ url }) => url.pathname.includes('/api/'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
@@ -48,7 +48,7 @@ export default defineConfig({
           },
           // Background Sync for POST requests (e.g. creating orders)
           {
-            urlPattern: /^https?:\/\/localhost:5000\/api\/.*$/i,
+            urlPattern: ({ url }) => url.pathname.includes('/api/'),
             handler: 'NetworkOnly',
             method: 'POST',
             options: {
@@ -62,7 +62,7 @@ export default defineConfig({
           },
           // Background Sync for PUT requests (e.g. status updates, payments)
           {
-            urlPattern: /^https?:\/\/localhost:5000\/api\/.*$/i,
+            urlPattern: ({ url }) => url.pathname.includes('/api/'),
             handler: 'NetworkOnly',
             method: 'PUT',
             options: {
