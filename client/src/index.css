@@ -1028,3 +1028,71 @@ tbody td {
   color: #1565C0;
   border: 1px solid #BBDEFB;
 }
+
+/* ── Responsive Order Cards ─────────── */
+.mobile-cards {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.order-card {
+  background: var(--white);
+  border: 1px solid var(--gray-light);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 4px;
+}
+
+.order-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--gray-light);
+}
+
+.order-card-id {
+  font-weight: 700;
+  color: var(--maroon);
+  font-size: 14px;
+}
+
+.order-card-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.order-card-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.order-card-label {
+  font-size: 10px;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.order-card-value {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.order-card-actions {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-light);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  /* Removed automatic table-to-card switch to allow manual toggle */
+}

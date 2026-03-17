@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu } from 'lucide-react';
+import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu, LayoutGrid, List } from 'lucide-react';
 import api from '../api/axios';
 
 const MEASUREMENT_LABELS = {
@@ -29,6 +29,9 @@ export default function CustomerSearch({ onMenuClick }) {
     const [searched, setSearched] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editForm, setEditForm] = useState({});
+    const [isEditingInfo, setIsEditingInfo] = useState(false);
+    const [editInfoForm, setEditInfoForm] = useState({});
+    const [viewMode, setViewMode] = useState(window.innerWidth < 768 ? 'cards' : 'table');
 
     useEffect(() => {
         if (id) {
@@ -108,6 +111,36 @@ export default function CustomerSearch({ onMenuClick }) {
             setEditForm({});
         } catch (err) {
             console.error('Failed to save measurements:', err);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function handleStartEditInfo() {
+        setEditInfoForm({
+            name: selected.name,
+            phone_number: selected.phone_number
+        });
+        setIsEditingInfo(true);
+    }
+
+    function handleCancelEditInfo() {
+        setIsEditingInfo(false);
+        setEditInfoForm({});
+    }
+
+    async function handleSaveEditInfo() {
+        setLoading(true);
+        try {
+            await api.put(`/customers/${selected.id}`, editInfoForm);
+            // Refresh selected customer data to see changes
+            const res = await api.get(`/customers/${selected.id}`);
+            setSelected(res.data);
+            setIsEditingInfo(false);
+            setEditInfoForm({});
+        } catch (err) {
+            console.error('Failed to save customer info:', err);
+            alert(err.response?.data?.error || 'Failed to update customer info');
         } finally {
             setLoading(false);
         }
@@ -211,19 +244,62 @@ export default function CustomerSearch({ onMenuClick }) {
                             <div className="card">
                                 <div className="card-header">
                                     <h3 className="card-title flex gap-8"><User size={18} color="var(--gold)" /> Customer Info</h3>
-                                    <Link to="/new-order" className="btn btn-sm btn-primary"><Plus size={13} /> New Order</Link>
+                                    {!isEditingInfo ? (
+                                        <div className="flex gap-8">
+                                            <a href={`tel:${selected.phone_number}`} className="btn btn-sm btn-outline" style={{ color: '#2E7D32', borderColor: '#2E7D32' }} title="Call Customer">
+                                                <Phone size={13} /> Call
+                                            </a>
+                                            <button className="btn btn-sm btn-outline" onClick={handleStartEditInfo} title="Edit Info">
+                                                <Edit2 size={13} /> Edit
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex gap-8">
+                                            <button className="btn btn-sm btn-ghost" onClick={handleCancelEditInfo} style={{ color: 'var(--maroon)' }}>
+                                                <X size={14} /> Cancel
+                                            </button>
+                                            <button className="btn btn-sm btn-primary" onClick={handleSaveEditInfo} disabled={loading}>
+                                                <Check size={14} /> {loading ? 'Saving...' : 'Save'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="card-body">
                                     <div style={{ marginBottom: 12 }}>
-                                        <div style={{ fontSize: 22, fontFamily: 'var(--font-serif)', fontWeight: 600, color: 'var(--maroon-dark)' }}>
-                                            {selected.name}
-                                        </div>
-                                        <div className="flex gap-8 mt-4" style={{ color: 'var(--gray)', fontSize: 13 }}>
-                                            <Phone size={14} /> {selected.phone_number}
-                                        </div>
-                                        <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 6 }}>
-                                            Customer since {formatDate(selected.created_at)}
-                                        </div>
+                                        {isEditingInfo ? (
+                                            <div className="flex-column gap-8">
+                                                <div>
+                                                    <label className="form-label" style={{ fontSize: 11 }}>Name</label>
+                                                    <input
+                                                        className="form-input"
+                                                        value={editInfoForm.name || ''}
+                                                        onChange={e => setEditInfoForm({ ...editInfoForm, name: e.target.value })}
+                                                        style={{ height: 32, fontSize: 14 }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="form-label" style={{ fontSize: 11 }}>Phone</label>
+                                                    <input
+                                                        className="form-input"
+                                                        value={editInfoForm.phone_number || ''}
+                                                        onChange={e => setEditInfoForm({ ...editInfoForm, phone_number: e.target.value })}
+                                                        style={{ height: 32, fontSize: 14 }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ fontSize: 22, fontFamily: 'var(--font-serif)', fontWeight: 600, color: 'var(--maroon-dark)' }}>
+                                                    {selected.name}
+                                                </div>
+                                                <div className="flex gap-8 mt-4" style={{ color: 'var(--gray)', fontSize: 13 }}>
+                                                    <Phone size={14} /> {selected.phone_number}
+                                                </div>
+                                                <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 6 }}>
+                                                    Customer since {formatDate(selected.created_at)}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -288,44 +364,107 @@ export default function CustomerSearch({ onMenuClick }) {
                         <div className="card">
                             <div className="card-header">
                                 <h3 className="card-title flex gap-8"><ShoppingBag size={18} color="var(--gold)" /> Order History</h3>
-                                <span className="badge" style={{ background: 'var(--blush)', color: 'var(--maroon)', border: '1px solid var(--gold-pale)' }}>
-                                    {selected.orders?.length || 0} orders
-                                </span>
+                                <div className="flex gap-16">
+                                    <div className="flex gap-4 p-4" style={{ background: 'var(--gray-light)', borderRadius: 8 }}>
+                                        <button
+                                            className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-ghost'}`}
+                                            onClick={() => setViewMode('table')}
+                                            style={{ padding: '4px 8px', minHeight: 'auto', border: 'none' }}
+                                        >
+                                            <List size={14} />
+                                        </button>
+                                        <button
+                                            className={`btn btn-sm ${viewMode === 'cards' ? 'btn-primary' : 'btn-ghost'}`}
+                                            onClick={() => setViewMode('cards')}
+                                            style={{ padding: '4px 8px', minHeight: 'auto', border: 'none' }}
+                                        >
+                                            <LayoutGrid size={14} />
+                                        </button>
+                                    </div>
+                                    <span className="badge" style={{ background: 'var(--blush)', color: 'var(--maroon)', border: '1px solid var(--gold-pale)' }}>
+                                        {selected.orders?.length || 0} orders
+                                    </span>
+                                </div>
                             </div>
                             {!selected.orders?.length ? (
-                                <div className="empty-state">No orders found for this customer.</div>
+                                <div className="card-body">
+                                    <div className="empty-state">No orders found for this customer.</div>
+                                </div>
                             ) : (
-                                <div className="table-container" style={{ border: 'none' }}>
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th>#</th><th>Booking</th><th>Delivery</th>
-                                                <th>Amount</th><th>Advance</th><th>Balance</th><th>Status</th><th>Bill</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
+                                <div className="card-body" style={{ padding: 0 }}>
+                                    {viewMode === 'table' && (
+                                        <div className="table-container" style={{ border: 'none', display: 'block' }}>
+                                            <table>
+                                                <thead>
+                                                    <tr>
+                                                        <th>#</th><th>Booking</th><th>Delivery</th>
+                                                        <th>Amount</th><th>Advance</th><th>Balance</th><th>Status</th><th>Bill</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selected.orders.map(o => (
+                                                        <tr key={o.order_id}>
+                                                            <td><span style={{ fontWeight: 600, color: 'var(--maroon)' }}>#{String(o.order_id).padStart(4, '0')}</span></td>
+                                                            <td style={{ fontSize: 12 }}>{formatDate(o.booking_date)}</td>
+                                                            <td style={{ fontSize: 12 }}>{formatDate(o.delivery_date)}</td>
+                                                            <td><strong>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</strong></td>
+                                                            <td style={{ color: '#2E7D32' }}>{`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}</td>
+                                                            <td style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 600 }}>
+                                                                {`\u20b9${parseFloat(o.balance_amount).toLocaleString('en-IN')}`}
+                                                            </td>
+                                                            <td><span className={`badge badge-${o.status.toLowerCase()}`}>{o.status}</span></td>
+                                                            <td>
+                                                                <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
+                                                                    <Eye size={12} /> Bill
+                                                                </Link>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+
+                                    {viewMode === 'cards' && (
+                                        <div className="mobile-cards" style={{ padding: 16, display: 'flex' }}>
                                             {selected.orders.map(o => (
-                                                <tr key={o.order_id}>
-                                                    <td><span style={{ fontWeight: 600, color: 'var(--maroon)' }}>#{String(o.order_id).padStart(4, '0')}</span></td>
-                                                    <td style={{ fontSize: 12 }}>{formatDate(o.booking_date)}</td>
-                                                    <td style={{ fontSize: 12 }}>{formatDate(o.delivery_date)}</td>
-                                                    <td><strong>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</strong></td>
-                                                    <td style={{ color: '#2E7D32' }}>{`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}</td>
-                                                    <td style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 600 }}>
-                                                        {`\u20b9${parseFloat(o.balance_amount).toLocaleString('en-IN')}`}
-                                                    </td>
-                                                    <td><span className={`badge badge-${o.status.toLowerCase()}`}>{o.status}</span></td>
-                                                    <td>
+                                                <div key={o.order_id} className="order-card">
+                                                    <div className="order-card-header">
+                                                        <span className="order-card-id">#{String(o.order_id).padStart(4, '0')}</span>
+                                                        <span className={`badge badge-${o.status.toLowerCase()}`}>{o.status}</span>
+                                                    </div>
+                                                    <div className="order-card-body">
+                                                        <div className="order-card-item">
+                                                            <span className="order-card-label">Booking</span>
+                                                            <span className="order-card-value text-gray">{formatDate(o.booking_date)}</span>
+                                                        </div>
+                                                        <div className="order-card-item">
+                                                            <span className="order-card-label">Delivery</span>
+                                                            <span className="order-card-value">{formatDate(o.delivery_date)}</span>
+                                                        </div>
+                                                        <div className="order-card-item">
+                                                            <span className="order-card-label">Amount</span>
+                                                            <span className="order-card-value" style={{ fontWeight: 700 }}>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</span>
+                                                        </div>
+                                                        <div className="order-card-item">
+                                                            <span className="order-card-label">Balance</span>
+                                                            <span className="order-card-value" style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 700 }}>
+                                                                {`\u20b9${parseFloat(o.balance_amount).toLocaleString('en-IN')}`}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="order-card-actions">
                                                         <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
                                                             <Eye size={12} /> Bill
                                                         </Link>
-                                                    </td>
-                                                </tr>
+                                                    </div>
+                                                </div>
                                             ))}
-                                        </tbody>
-                                    </table>
+                                        </div>
+                                    )}
                                 </div>
                             )}
+
                         </div>
                     </div>
                 )}

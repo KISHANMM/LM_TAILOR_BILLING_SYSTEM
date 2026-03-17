@@ -12,13 +12,13 @@ router.get('/search', async (req, res) => {
             query = `SELECT c.*, m.length as m_length, m.shoulder, m.chest, m.waist, m.dot,
                  m.back_neck, m.front_neck, m.sleeves_length, m.armhole, m.chest_distance, m.sleeves_round
                  FROM customers c LEFT JOIN measurements m ON m.customer_id = c.id
-                 WHERE c.phone_number LIKE ? GROUP BY c.id`;
+                 WHERE c.phone_number LIKE ? GROUP BY c.id LIMIT 20`;
             param = `%${phone}%`;
         } else if (name) {
             query = `SELECT c.*, m.length as m_length, m.shoulder, m.chest, m.waist, m.dot,
                  m.back_neck, m.front_neck, m.sleeves_length, m.armhole, m.chest_distance, m.sleeves_round
                  FROM customers c LEFT JOIN measurements m ON m.customer_id = c.id
-                 WHERE c.name LIKE ? GROUP BY c.id`;
+                 WHERE c.name LIKE ? GROUP BY c.id LIMIT 20`;
             param = `%${name}%`;
         } else {
             return res.json([]);
@@ -137,6 +137,33 @@ router.post('/', async (req, res) => {
 router.put('/:id/measurements', async (req, res) => {
     try {
         await upsertMeasurements(req.params.id, req.body);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/customers/:id
+router.put('/:id', async (req, res) => {
+    try {
+        const { name, phone_number } = req.body;
+        if (!name || !phone_number) return res.status(400).json({ error: 'Name and phone number required' });
+
+        // Check if phone number is already taken by another customer
+        const existingRs = await db.execute({
+            sql: 'SELECT id FROM customers WHERE phone_number = ? AND id != ?',
+            args: [phone_number, req.params.id]
+        });
+
+        if (existingRs.rows.length > 0) {
+            return res.status(400).json({ error: 'Phone number already exists for another customer' });
+        }
+
+        await db.execute({
+            sql: 'UPDATE customers SET name = ?, phone_number = ? WHERE id = ?',
+            args: [name, phone_number, req.params.id]
+        });
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

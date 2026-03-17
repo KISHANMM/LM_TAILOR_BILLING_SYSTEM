@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Eye, Filter, RefreshCw, Menu } from 'lucide-react';
+import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List } from 'lucide-react';
 import api from '../api/axios';
 
 function StatusBadge({ status }) {
@@ -22,6 +22,7 @@ export default function OrderHistory({ onMenuClick }) {
     const [statusFilter, setStatusFilter] = useState('All');
     const [dateFilter, setDateFilter] = useState('');
     const [updatingId, setUpdatingId] = useState(null);
+    const [viewMode, setViewMode] = useState(window.innerWidth < 768 ? 'cards' : 'table');
 
     function fetchOrders() {
         setLoading(true);
@@ -35,7 +36,12 @@ export default function OrderHistory({ onMenuClick }) {
             .finally(() => setLoading(false));
     }
 
-    useEffect(() => { fetchOrders(); }, [statusFilter, dateFilter]);
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchOrders();
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search, statusFilter, dateFilter]);
 
     async function handleStatusChange(orderId, newStatus) {
         setUpdatingId(orderId);
@@ -47,11 +53,7 @@ export default function OrderHistory({ onMenuClick }) {
         }
     }
 
-    const filtered = orders.filter(o => {
-        if (!search) return true;
-        return o.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-            o.phone_number.includes(search);
-    });
+    const filtered = orders;
 
     const handleWhatsAppReview = (order) => {
         let phoneForUrl = order.phone_number.replace(/\D/g, '');
@@ -83,9 +85,29 @@ export default function OrderHistory({ onMenuClick }) {
                         <div className="topbar-subtitle">{filtered.length} order(s) found</div>
                     </div>
                 </div>
-                <button className="btn btn-ghost" onClick={fetchOrders}>
-                    <RefreshCw size={15} /> <span className="hide-mobile">Refresh</span>
-                </button>
+                <div className="flex gap-12">
+                    <div className="flex gap-4 p-4" style={{ background: 'var(--gray-light)', borderRadius: 8 }}>
+                        <button
+                            className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-ghost'}`}
+                            onClick={() => setViewMode('table')}
+                            style={{ padding: '6px 10px', minHeight: 'auto', border: 'none' }}
+                            title="Table View"
+                        >
+                            <List size={14} />
+                        </button>
+                        <button
+                            className={`btn btn-sm ${viewMode === 'cards' ? 'btn-primary' : 'btn-ghost'}`}
+                            onClick={() => setViewMode('cards')}
+                            style={{ padding: '6px 10px', minHeight: 'auto', border: 'none' }}
+                            title="Card View"
+                        >
+                            <LayoutGrid size={14} />
+                        </button>
+                    </div>
+                    <button className="btn btn-ghost" onClick={fetchOrders}>
+                        <RefreshCw size={15} /> <span className="hide-mobile">Refresh</span>
+                    </button>
+                </div>
             </div>
 
             <div className="page-container">
@@ -136,57 +158,105 @@ export default function OrderHistory({ onMenuClick }) {
                 </div>
 
                 <div className="card">
-                    <div className="table-container" style={{ border: 'none' }}>
-                        {loading ? (
+                    {loading ? (
+                        <div className="card-body">
                             <div className="spinner" />
-                        ) : (
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Customer</th>
-                                        <th>Phone</th>
-                                        <th>Booking</th>
-                                        <th>Delivery</th>
-                                        <th>Total</th>
-                                        <th>Advance</th>
-                                        <th>Balance</th>
-                                        <th>Status</th>
-                                        <th>Bill</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                        </div>
+                    ) : (
+                        <div className="card-body" style={{ padding: 0 }}>
+                            {viewMode === 'table' && (
+                                <div className="table-container" style={{ border: 'none', display: 'block' }}>
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Customer</th>
+                                                <th>Phone</th>
+                                                <th>Booking</th>
+                                                <th>Delivery</th>
+                                                <th>Total</th>
+                                                <th>Advance</th>
+                                                <th>Balance</th>
+                                                <th>Status</th>
+                                                <th>Bill</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filtered.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={10} style={{ textAlign: 'center', padding: '32px', color: 'var(--gray)' }}>
+                                                        No orders found
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {filtered.map(o => (
+                                                <tr key={o.order_id}>
+                                                    <td>
+                                                        <span style={{ fontWeight: 700, color: 'var(--maroon)' }}>#{String(o.order_id).padStart(4, '0')}</span>
+                                                    </td>
+                                                    <td>
+                                                        <Link to={`/customer/${o.customer_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                                                            <strong>{o.customer_name}</strong>
+                                                        </Link>
+                                                    </td>
+                                                    <td style={{ fontSize: 12 }}>{o.phone_number}</td>
+                                                    <td style={{ fontSize: 12 }}>{formatDate(o.booking_date)}</td>
+                                                    <td style={{ fontSize: 12, color: new Date(o.delivery_date) < new Date() && o.status !== 'Delivered' ? '#E65100' : 'inherit' }}>
+                                                        {formatDate(o.delivery_date)}
+                                                    </td>
+                                                    <td><strong>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</strong></td>
+                                                    <td style={{ color: '#2E7D32', fontSize: 13 }}>{`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}</td>
+                                                    <td style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 600, fontSize: 13 }}>
+                                                        {`\u20b9${parseFloat(o.balance_amount).toLocaleString('en-IN')}`}
+                                                    </td>
+                                                    <td>
+                                                        <select
+                                                            className="form-select"
+                                                            style={{ padding: '4px 8px', fontSize: 12, width: 110 }}
+                                                            value={o.status}
+                                                            disabled={updatingId === o.order_id}
+                                                            onChange={e => handleStatusChange(o.order_id, e.target.value)}
+                                                        >
+                                                            <option>Pending</option>
+                                                            <option>Ready</option>
+                                                            <option>Delivered</option>
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <div className="flex gap-8">
+                                                            <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
+                                                                <Eye size={12} /> Bill
+                                                            </Link>
+                                                            {o.status === 'Delivered' && (
+                                                                <button
+                                                                    className="btn btn-sm btn-outline"
+                                                                    style={{ borderColor: '#2E7D32', color: '#2E7D32', padding: '4px 8px' }}
+                                                                    onClick={(e) => { e.stopPropagation(); handleWhatsAppReview(o); }}
+                                                                >
+                                                                    Review
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {viewMode === 'cards' && (
+                                <div className="mobile-cards" style={{ padding: 16, display: 'flex' }}>
                                     {filtered.length === 0 && (
-                                        <tr>
-                                            <td colSpan={10} style={{ textAlign: 'center', padding: '32px', color: 'var(--gray)' }}>
-                                                No orders found
-                                            </td>
-                                        </tr>
+                                        <div className="empty-state">No orders found</div>
                                     )}
                                     {filtered.map(o => (
-                                        <tr key={o.order_id}>
-                                            <td>
-                                                <span style={{ fontWeight: 700, color: 'var(--maroon)' }}>#{String(o.order_id).padStart(4, '0')}</span>
-                                            </td>
-                                            <td>
-                                                <Link to={`/customer/${o.customer_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                                                    <strong>{o.customer_name}</strong>
-                                                </Link>
-                                            </td>
-                                            <td style={{ fontSize: 12 }}>{o.phone_number}</td>
-                                            <td style={{ fontSize: 12 }}>{formatDate(o.booking_date)}</td>
-                                            <td style={{ fontSize: 12, color: new Date(o.delivery_date) < new Date() && o.status !== 'Delivered' ? '#E65100' : 'inherit' }}>
-                                                {formatDate(o.delivery_date)}
-                                            </td>
-                                            <td><strong>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</strong></td>
-                                            <td style={{ color: '#2E7D32', fontSize: 13 }}>{`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}</td>
-                                            <td style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 600, fontSize: 13 }}>
-                                                {`\u20b9${parseFloat(o.balance_amount).toLocaleString('en-IN')}`}
-                                            </td>
-                                            <td>
+                                        <div key={o.order_id} className="order-card">
+                                            <div className="order-card-header">
+                                                <span className="order-card-id">#{String(o.order_id).padStart(4, '0')}</span>
                                                 <select
                                                     className="form-select"
-                                                    style={{ padding: '4px 8px', fontSize: 12, width: 110 }}
+                                                    style={{ padding: '4px 8px', fontSize: 12, width: 100 }}
                                                     value={o.status}
                                                     disabled={updatingId === o.order_id}
                                                     onChange={e => handleStatusChange(o.order_id, e.target.value)}
@@ -195,28 +265,55 @@ export default function OrderHistory({ onMenuClick }) {
                                                     <option>Ready</option>
                                                     <option>Delivered</option>
                                                 </select>
-                                            </td>
-                                            <td style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            </div>
+                                            <div className="order-card-body">
+                                                <div className="order-card-item" style={{ gridColumn: 'span 2' }}>
+                                                    <span className="order-card-label">Customer</span>
+                                                    <span className="order-card-value">{o.customer_name}</span>
+                                                </div>
+                                                <div className="order-card-item">
+                                                    <span className="order-card-label">Phone</span>
+                                                    <span className="order-card-value text-gray">{o.phone_number}</span>
+                                                </div>
+                                                <div className="order-card-item">
+                                                    <span className="order-card-label">Delivery</span>
+                                                    <span className="order-card-value" style={{ color: new Date(o.delivery_date) < new Date() && o.status !== 'Delivered' ? '#E65100' : 'inherit' }}>
+                                                        {formatDate(o.delivery_date)}
+                                                    </span>
+                                                </div>
+                                                <div className="order-card-item">
+                                                    <span className="order-card-label">Total Amount</span>
+                                                    <span className="order-card-value" style={{ fontWeight: 700 }}>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</span>
+                                                </div>
+                                                <div className="order-card-item">
+                                                    <span className="order-card-label">Balance</span>
+                                                    <span className="order-card-value" style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 700 }}>
+                                                        {`\u20b9${parseFloat(o.balance_amount).toLocaleString('en-IN')}`}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="order-card-actions">
                                                 <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
                                                     <Eye size={12} /> Bill
                                                 </Link>
                                                 {o.status === 'Delivered' && (
                                                     <button
                                                         className="btn btn-sm btn-outline"
-                                                        style={{ borderColor: '#2E7D32', color: '#2E7D32', padding: '4px 8px' }}
-                                                        onClick={(e) => { e.stopPropagation(); handleWhatsAppReview(o); }}
+                                                        style={{ borderColor: '#2E7D32', color: '#2E7D32' }}
+                                                        onClick={() => handleWhatsAppReview(o)}
                                                     >
                                                         Review
                                                     </button>
                                                 )}
-                                            </td>
-                                        </tr>
+                                            </div>
+                                        </div>
                                     ))}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
+
             </div>
         </div>
     );

@@ -303,35 +303,20 @@ export default function NewOrder({ onMenuClick, auth }) {
 
         setLoading(true);
         try {
-            // Create / lookup customer
-            const custRes = await api.post('/customers', {
-                name: customer.name,
-                phone_number: customer.phone_number,
-                measurements: Object.keys(measPayload).length > 0 ? measPayload : undefined,
-            });
-            const cid = custRes.data.id;
-
-            const finalOrderPayload = {
+            const audioData = audioBlob ? await blobToBase64(audioBlob) : null;
+            
+            const finalPayload = {
                 ...orderPayload,
-                customer_id: cid
+                customer_id: customerId,
+                customer: !customerId ? { name: customer.name, phone_number: customer.phone_number } : undefined,
+                measurements: Object.keys(measPayload).length > 0 ? measPayload : undefined,
+                images: images.length > 0 ? images : undefined,
+                audio_data: audioData,
+                recordingTime: audioBlob ? recordingTime : undefined
             };
 
-            const orderRes = await api.post('/orders', finalOrderPayload);
+            const orderRes = await api.post('/orders', finalPayload);
             const createdOrderId = orderRes.data.order_id;
-
-            // Upload images if any
-            if (images.length > 0) {
-                await api.post(`/orders/${createdOrderId}/images`, { images });
-            }
-
-            // Upload voice note if any
-            if (audioBlob) {
-                const base64Audio = await blobToBase64(audioBlob);
-                await api.post(`/orders/${createdOrderId}/voice-notes`, {
-                    audio_data: base64Audio,
-                    duration: recordingTime
-                });
-            }
 
             toast.success('Order created successfully!');
             if (auth?.role === 'Worker') {
@@ -340,6 +325,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                 navigate(`/bill/${createdOrderId}`);
             }
         } catch (err) {
+            console.error('Order creation failed:', err);
             toast.error(err.response?.data?.error || 'Failed to create order');
         } finally {
             setLoading(false);

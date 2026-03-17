@@ -77,11 +77,15 @@ router.get('/summary', async (req, res) => {
             yearly_expense: "SELECT sum(amount) as val FROM expenses WHERE substr(date, 1, 4) = substr(date('now', 'localtime'), 1, 4)",
         };
 
+        const queryEntries = Object.entries(queries);
+        const batchQueries = queryEntries.map(([_, sql]) => sql);
+        
+        const rsBatch = await db.batch(batchQueries, "read");
+        
         const results = {};
-        for (const [key, sql] of Object.entries(queries)) {
-            const rs = await db.execute(sql);
-            results[key] = rs.rows[0]?.val || 0;
-        }
+        queryEntries.forEach(([key, _], index) => {
+            results[key] = rsBatch[index].rows[0]?.val || 0;
+        });
 
         results.today_expense = (results.today_expense || 0) + (results.today_stitching || 0);
         results.monthly_expense = (results.monthly_expense || 0) + (results.monthly_stitching || 0);

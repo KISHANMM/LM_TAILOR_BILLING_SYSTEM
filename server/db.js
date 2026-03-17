@@ -6,8 +6,8 @@ require('dotenv').config();
 // If it's empty, we use a local file
 // For local development, use a simple file name
 // For cloud, use the full libsql:// URL
-const isLocal = !process.env.DATABASE_URL;
 const url = process.env.DATABASE_URL || "file:./lm_tailor.db";
+const isLocal = url.startsWith('file:');
 
 console.log('🔗 Connecting to:', url);
 
@@ -87,7 +87,15 @@ async function initDB() {
         duration INTEGER,
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE
-      )`
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)`,
+      `CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone_number)`,
+      `CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_orders_delivery_date ON orders(delivery_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_services_order_id ON services(order_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)`
     ], "write");
     console.log('✅ Batch execution successful');
 

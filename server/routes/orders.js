@@ -5,41 +5,108 @@ const { db } = require('../db');
 // POST /api/orders
 router.post('/', async (req, res) => {
     try {
-        const { customer_id, booking_date, delivery_date, advance_paid, notes, services, measurement_type, assigned_worker, stitching_expense, payment_method } = req.body;
-        if (!customer_id || !booking_date || !delivery_date)
-            return res.status(400).json({ error: 'customer_id, booking_date, delivery_date are required' });
+        const { 
+            customer_id, customer,  // Can pass either id or full customer object
+            booking_date, delivery_date, advance_paid, notes, 
+            services, measurement_type, assigned_worker, 
+            stitching_expense, payment_method,
+            measurements, images, audio_data, recordingTime
+        } = req.body;
+
+        if ((!customer_id && (!customer || !customer.name || !customer.phone_number)) || !booking_date || !delivery_date)
+            return res.status(400).json({ error: 'Customer info, booking_date, delivery_date are required' });
         if (!services || services.length === 0)
             return res.status(400).json({ error: 'At least one service required' });
 
+        let cid = customer_id;
+        
+        // 1. Resolve Customer if needed
+        if (!cid && customer) {
+            const existingRs = await db.execute({
+                sql: 'SELECT id FROM customers WHERE phone_number = ?',
+                args: [customer.phone_number]
+            });
+            if (existingRs.rows.length > 0) {
+                cid = existingRs.rows[0].id;
+            } else {
+                const insertRs = await db.execute({
+                    sql: 'INSERT INTO customers (name, phone_number) VALUES (?, ?)',
+                    args: [customer.name, customer.phone_number]
+                });
+                cid = Number(insertRs.lastInsertRowid);
+            }
+        }
+
+        // 2. Prepare Batch Operations
         const total_amount = services.reduce((s, svc) => s + (parseFloat(svc.price) * parseInt(svc.quantity)), 0);
         const advance = parseFloat(advance_paid) || 0;
         const balance_amount = total_amount - advance;
 
-        // Use batch for transaction-like atomic behavior
-        const batchOps = [
-            {
-                sql: `INSERT INTO orders (customer_id, booking_date, delivery_date, total_amount, advance_paid, balance_amount, notes, measurement_type, assigned_worker, stitching_expense, payment_method)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                args: [customer_id, booking_date, delivery_date, total_amount, advance, balance_amount, notes || null, measurement_type || 'Body', assigned_worker || null, parseFloat(stitching_expense) || 0, payment_method || 'Cash']
-            }
-        ];
+        const mainBatch = [];
 
-        // We need the orderId for services, so we execute order first or use a batch trick.
-        // LibSQL doesn't easily support 'last_insert_rowid()' inside a single batch for subsequent inserts as easily as sqlite3's serialize.
-        // However, we can use a transaction or two steps.
+        // Update/Insert measurements if provided
+        if (measurements && Object.keys(measurements).length > 0) {
+            const m = measurements;
+            mainBatch.push({
+                sql: `INSERT INTO measurements (customer_id, length, shoulder, chest, waist, dot, back_neck, front_neck, sleeves_length, armhole, chest_distance, sleeves_round)
+                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                      ON CONFLICT(customer_id) DO UPDATE SET
+                      length=excluded.length, shoulder=excluded.shoulder, chest=excluded.chest, waist=excluded.waist, dot=excluded.dot,
+                      back_neck=excluded.back_neck, front_neck=excluded.front_neck, sleeves_length=excluded.sleeves_length,
+                      armhole=excluded.armhole, chest_distance=excluded.chest_distance, sleeves_round=excluded.sleeves_round,
+                      updated_at=datetime('now','localtime')`,
+                args: [
+                    cid, parseFloat(m.length || m.m_length) || null, parseFloat(m.shoulder) || null, parseFloat(m.chest) || null,
+                    parseFloat(m.waist) || null, parseFloat(m.dot) || null, parseFloat(m.back_neck) || null,
+                    parseFloat(m.front_neck) || null, parseFloat(m.sleeves_length) || null, parseFloat(m.armhole) || null,
+                    parseFloat(m.chest_distance) || null, parseFloat(m.sleeves_round) || null
+                ]
+            });
+        }
 
-        const orderRs = await db.execute(batchOps[0]);
+        // Insert Order
+        const orderRs = await db.execute({
+            sql: `INSERT INTO orders (customer_id, booking_date, delivery_date, total_amount, advance_paid, balance_amount, notes, measurement_type, assigned_worker, stitching_expense, payment_method)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            args: [cid, booking_date, delivery_date, total_amount, advance, balance_amount, notes || null, measurement_type || 'Body', assigned_worker || null, parseFloat(stitching_expense) || 0, payment_method || 'Cash']
+        });
         const orderId = Number(orderRs.lastInsertRowid);
 
-        const serviceOps = services.map(svc => ({
-            sql: 'INSERT INTO services (order_id, service_type, quantity, price) VALUES (?, ?, ?, ?)',
-            args: [orderId, svc.service_type, parseInt(svc.quantity), parseFloat(svc.price)]
-        }));
+        const secondaryBatch = [];
 
-        await db.batch(serviceOps, "write");
+        // Services
+        services.forEach(svc => {
+            secondaryBatch.push({
+                sql: 'INSERT INTO services (order_id, service_type, quantity, price) VALUES (?, ?, ?, ?)',
+                args: [orderId, svc.service_type, parseInt(svc.quantity), parseFloat(svc.price)]
+            });
+        });
+
+        // Images
+        if (images && Array.isArray(images)) {
+            images.forEach(img => {
+                secondaryBatch.push({
+                    sql: 'INSERT INTO order_images (order_id, image_data) VALUES (?, ?)',
+                    args: [orderId, img]
+                });
+            });
+        }
+
+        // Voice Note
+        if (audio_data) {
+            secondaryBatch.push({
+                sql: 'INSERT INTO order_voice_notes (order_id, audio_data, duration) VALUES (?, ?, ?)',
+                args: [orderId, audio_data, recordingTime || null]
+            });
+        }
+
+        // Execute all related inserts in one batch
+        if (mainBatch.length > 0) await db.batch(mainBatch, "write");
+        if (secondaryBatch.length > 0) await db.batch(secondaryBatch, "write");
 
         res.status(201).json({ order_id: orderId, total_amount, advance_paid: advance, balance_amount });
     } catch (err) {
+        console.error('Order creation error:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -48,13 +115,9 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
     try {
         const { status, date, search, worker } = req.query;
-        let query = `SELECT o.*, c.name as customer_name, c.phone_number, 
-                           m.length as m_length, m.shoulder, m.chest, m.waist, m.dot, 
-                           m.back_neck, m.front_neck, m.sleeves_length, m.armhole, 
-                           m.chest_distance, m.sleeves_round
+        let query = `SELECT o.*, c.name as customer_name, c.phone_number
         FROM orders o 
         JOIN customers c ON c.id = o.customer_id 
-        LEFT JOIN measurements m ON m.customer_id = c.id
         WHERE 1=1`;
         const params = [];
 
