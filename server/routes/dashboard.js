@@ -5,6 +5,7 @@ const { db } = require('../db');
 // GET /api/dashboard
 router.get('/', async (req, res) => {
     try {
+        const today = new Date().toISOString().split('T')[0];
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowStr = tomorrow.toISOString().split('T')[0];
