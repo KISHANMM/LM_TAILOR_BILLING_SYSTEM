@@ -10,3 +10,6 @@ dist-ssr/
 # Google Service Account keys - never commit these
 *-credentials.json
 lm-tailor-*.json
+
+# Local project context (contains credentials)
+project_context.md
