@@ -6,3 +6,7 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+
+# Google Service Account keys - never commit these
+*-credentials.json
+lm-tailor-*.json

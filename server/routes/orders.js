@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
+const { appendOrderToSheet } = require('../sheets');
 
 // POST /api/orders
 router.post('/', async (req, res) => {
@@ -41,6 +42,20 @@ router.post('/', async (req, res) => {
         const total_amount = services.reduce((s, svc) => s + (parseFloat(svc.price) * parseInt(svc.quantity)), 0);
         const advance = parseFloat(advance_paid) || 0;
         const balance_amount = total_amount - advance;
+
+        // 3. Duplicate Guard — reject if same customer+delivery_date+total was inserted within 30s
+        const dupCheck = await db.execute({
+            sql: `SELECT order_id FROM orders 
+                  WHERE customer_id = ? AND delivery_date = ? AND total_amount = ?
+                  AND created_at >= datetime('now', '-30 seconds', 'localtime')
+                  ORDER BY order_id DESC LIMIT 1`,
+            args: [cid, delivery_date, total_amount]
+        });
+        if (dupCheck.rows.length > 0) {
+            // Return the existing order instead of creating a duplicate
+            const existingId = Number(dupCheck.rows[0].order_id);
+            return res.status(200).json({ order_id: existingId, total_amount, advance_paid: advance, balance_amount, duplicate: true });
+        }
 
         const mainBatch = [];
 
@@ -105,6 +120,56 @@ router.post('/', async (req, res) => {
         if (secondaryBatch.length > 0) await db.batch(secondaryBatch, "write");
 
         res.status(201).json({ order_id: orderId, total_amount, advance_paid: advance, balance_amount });
+
+        // ── Google Sheets backup (non-blocking) ──────────────────────────
+        // Fetch measurements for the sheet (best-effort, don't block response)
+        setImmediate(async () => {
+            try {
+                const measRs = await db.execute({
+                    sql: 'SELECT * FROM measurements WHERE customer_id = ?',
+                    args: [cid]
+                });
+                const meas = measRs.rows[0] || {};
+
+                const custRs = await db.execute({
+                    sql: 'SELECT name, phone_number FROM customers WHERE id = ?',
+                    args: [cid]
+                });
+                const cust = custRs.rows[0] || {};
+
+                const timeRs = await db.execute({
+                    sql: 'SELECT created_at FROM orders WHERE order_id = ?',
+                    args: [orderId]
+                });
+                const created_at = timeRs.rows[0]?.created_at || '';
+
+                await appendOrderToSheet({
+                    order_id: orderId,
+                    customer_name: customer?.name || cust.name || '',
+                    phone_number: customer?.phone_number || cust.phone_number || '',
+                    booking_date,
+                    delivery_date,
+                    services: services.map(s => ({
+                        service_type: s.service_type === 'Other' ? (s.custom_type || 'Other') : s.service_type,
+                        quantity: parseInt(s.quantity) || 1,
+                        price: parseFloat(s.price)
+                    })),
+                    total_amount,
+                    advance_paid: advance,
+                    balance_amount,
+                    payment_method: payment_method || 'Cash',
+                    assigned_worker: assigned_worker || '',
+                    measurement_type: measurement_type || 'Body',
+                    measurements: meas,
+                    notes: notes || '',
+                    created_at
+                });
+            } catch (sheetErr) {
+                console.error('[Sheets] Background backup error:', sheetErr.message);
+            }
+        });
+        // ────────────────────────────────────────────────────────────────
+
     } catch (err) {
         console.error('Order creation error:', err);
         res.status(500).json({ error: err.message });

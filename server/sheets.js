@@ -1,0 +1,186 @@
+// sheets.js — Google Sheets auto-backup helper
+// Appends a new row every time an order is created
+
+const { google } = require('googleapis');
+
+const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+const SHEET_TAB = 'Orders'; // tab name inside the spreadsheet
+
+// Column headers (bold formatting applied on first init)
+const HEADERS = [
+    'ORDER ID', 'CUSTOMER NAME', 'PHONE', 'BOOKING DATE', 'DELIVERY DATE',
+    'SERVICES', 'TOTAL (₹)', 'ADVANCE (₹)', 'BALANCE (₹)',
+    'PAYMENT METHOD', 'WORKER', 'MEAS. TYPE',
+    'LENGTH', 'SHOULDER', 'CHEST', 'WAIST', 'DOT',
+    'BACK NECK', 'FRONT NECK', 'SLEEVES LEN.', 'ARMHOLE',
+    'CHEST DIST.', 'SLEEVES ROUND',
+    'NOTES', 'CREATED AT'
+];
+
+function getAuthClient() {
+    const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    if (!keyJson) throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY env var not set');
+    const key = JSON.parse(keyJson);
+    return new google.auth.GoogleAuth({
+        credentials: key,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+}
+
+// Initialize sheet: create tab if needed, write bold headers if empty
+async function initSheet(sheets) {
+    // Check if tab exists
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+    const tabExists = meta.data.sheets.some(s => s.properties.title === SHEET_TAB);
+
+    if (!tabExists) {
+        await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: SHEET_ID,
+            requestBody: {
+                requests: [{
+                    addSheet: { properties: { title: SHEET_TAB } }
+                }]
+            }
+        });
+    }
+
+    // Check if headers already written
+    const existing = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_TAB}!A1:A1`,
+    });
+
+    if (existing.data.values && existing.data.values.length > 0) return; // already initialized
+
+    // Write header row
+    await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_TAB}!A1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [HEADERS] },
+    });
+
+    // Get the sheet ID for formatting
+    const updatedMeta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+    const sheetObj = updatedMeta.data.sheets.find(s => s.properties.title === SHEET_TAB);
+    const sheetTabId = sheetObj.properties.sheetId;
+
+    // Bold + background color for header row
+    await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SHEET_ID,
+        requestBody: {
+            requests: [
+                {
+                    // Bold text
+                    repeatCell: {
+                        range: { sheetId: sheetTabId, startRowIndex: 0, endRowIndex: 1 },
+                        cell: {
+                            userEnteredFormat: {
+                                textFormat: { bold: true, fontSize: 11 },
+                                backgroundColor: { red: 0.18, green: 0.05, blue: 0.05 }, // dark maroon
+                                horizontalAlignment: 'CENTER',
+                            }
+                        },
+                        fields: 'userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)'
+                    }
+                },
+                {
+                    // Freeze header row
+                    updateSheetProperties: {
+                        properties: {
+                            sheetId: sheetTabId,
+                            gridProperties: { frozenRowCount: 1 }
+                        },
+                        fields: 'gridProperties.frozenRowCount'
+                    }
+                },
+                {
+                    // Auto-resize columns
+                    autoResizeDimensions: {
+                        dimensions: {
+                            sheetId: sheetTabId,
+                            dimension: 'COLUMNS',
+                            startIndex: 0,
+                            endIndex: HEADERS.length
+                        }
+                    }
+                }
+            ]
+        }
+    });
+}
+
+/**
+ * Append a new order row to the Google Sheet.
+ * Called after successful order creation. Non-blocking — errors are logged, not thrown.
+ *
+ * @param {object} data - Order data object
+ */
+async function appendOrderToSheet(data) {
+    if (!SHEET_ID) {
+        console.warn('[Sheets] GOOGLE_SHEET_ID not set — skipping backup');
+        return;
+    }
+    try {
+        const auth = getAuthClient();
+        const sheets = google.sheets({ version: 'v4', auth });
+
+        await initSheet(sheets);
+
+        const {
+            order_id, customer_name, phone_number,
+            booking_date, delivery_date,
+            services, total_amount, advance_paid, balance_amount,
+            payment_method, assigned_worker, measurement_type,
+            measurements = {}, notes, created_at
+        } = data;
+
+        // Format services as readable string: "Blouse x1 (₹800), Alteration x2 (₹300)"
+        const servicesStr = Array.isArray(services)
+            ? services.map(s => `${s.service_type} x${s.quantity} (₹${s.price})`).join(', ')
+            : '';
+
+        const row = [
+            `#${String(order_id).padStart(4, '0')}`,
+            customer_name || '',
+            phone_number || '',
+            booking_date || '',
+            delivery_date || '',
+            servicesStr,
+            total_amount || 0,
+            advance_paid || 0,
+            balance_amount || 0,
+            payment_method || 'Cash',
+            assigned_worker || '',
+            measurement_type || '',
+            measurements.length || measurements.m_length || '',
+            measurements.shoulder || '',
+            measurements.chest || '',
+            measurements.waist || '',
+            measurements.dot || '',
+            measurements.back_neck || '',
+            measurements.front_neck || '',
+            measurements.sleeves_length || '',
+            measurements.armhole || '',
+            measurements.chest_distance || '',
+            measurements.sleeves_round || '',
+            notes || '',
+            created_at || new Date().toLocaleString('en-IN'),
+        ];
+
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: SHEET_ID,
+            range: `${SHEET_TAB}!A1`,
+            valueInputOption: 'USER_ENTERED',
+            insertDataOption: 'INSERT_ROWS',
+            requestBody: { values: [row] },
+        });
+
+        console.log(`[Sheets] ✅ Order ${row[0]} backed up to Google Sheet`);
+    } catch (err) {
+        // Never crash the order creation — just log the error
+        console.error('[Sheets] ❌ Failed to backup order:', err.message);
+    }
+}
+
+module.exports = { appendOrderToSheet };
