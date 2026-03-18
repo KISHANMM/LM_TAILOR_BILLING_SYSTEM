@@ -198,6 +198,35 @@ router.put('/:id/expense', async (req, res) => {
     }
 });
 
+// PUT /api/orders/:id/advance
+router.put('/:id/advance', async (req, res) => {
+    try {
+        const { advance_paid } = req.body;
+        if (advance_paid === undefined) {
+            return res.status(400).json({ error: 'advance_paid required' });
+        }
+
+        const currentRs = await db.execute({
+            sql: 'SELECT total_amount FROM orders WHERE order_id = ?',
+            args: [req.params.id]
+        });
+        if (currentRs.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+        
+        const total_amount = currentRs.rows[0].total_amount;
+        const advance = parseFloat(advance_paid) || 0;
+        const balance_amount = total_amount - advance;
+
+        await db.execute({
+            sql: 'UPDATE orders SET advance_paid = ?, balance_amount = ? WHERE order_id = ?',
+            args: [advance, balance_amount, req.params.id]
+        });
+
+        res.json({ success: true, total_amount, balance_amount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // PUT /api/orders/:id
 router.put('/:id', async (req, res) => {
     try {

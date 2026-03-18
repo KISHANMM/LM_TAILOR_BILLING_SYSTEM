@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List } from 'lucide-react';
+import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List, Edit2, Check, X } from 'lucide-react';
 import api from '../api/axios';
 
 function StatusBadge({ status }) {
@@ -23,6 +23,8 @@ export default function OrderHistory({ onMenuClick }) {
     const [dateFilter, setDateFilter] = useState('');
     const [updatingId, setUpdatingId] = useState(null);
     const [viewMode, setViewMode] = useState(window.innerWidth < 768 ? 'cards' : 'table');
+    const [editingAdvanceId, setEditingAdvanceId] = useState(null);
+    const [tempAdvanceValue, setTempAdvanceValue] = useState('');
 
     function fetchOrders() {
         setLoading(true);
@@ -47,8 +49,26 @@ export default function OrderHistory({ onMenuClick }) {
         setUpdatingId(orderId);
         try {
             await api.put(`/orders/${orderId}/status`, { status: newStatus });
-            setOrders(prev => prev.map(o => o.order_id === orderId ? { ...o, status: newStatus } : o));
+            setOrders(prev => prev.map(o => o.order_id === orderId ? { ...o, status: newStatus, advance_paid: newStatus === 'Delivered' ? o.total_amount : o.advance_paid, balance_amount: newStatus === 'Delivered' ? 0 : o.balance_amount } : o));
         } catch { /* silent */ } finally {
+            setUpdatingId(null);
+        }
+    }
+
+    async function handleAdvanceUpdate(orderId) {
+        const val = parseFloat(tempAdvanceValue) || 0;
+        if (!window.confirm(`Are you sure you want to update the advance to \u20b9${val.toLocaleString('en-IN')}?`)) {
+            return;
+        }
+        setUpdatingId(orderId);
+        try {
+            const r = await api.put(`/orders/${orderId}/advance`, { advance_paid: val });
+            setOrders(prev => prev.map(o => o.order_id === orderId ? { ...o, advance_paid: val, balance_amount: r.data.balance_amount } : o));
+            setEditingAdvanceId(null);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to update advance');
+        } finally {
             setUpdatingId(null);
         }
     }
@@ -204,8 +224,38 @@ export default function OrderHistory({ onMenuClick }) {
                                                     <td style={{ fontSize: 12, color: new Date(o.delivery_date) < new Date() && o.status !== 'Delivered' ? '#E65100' : 'inherit' }}>
                                                         {formatDate(o.delivery_date)}
                                                     </td>
-                                                    <td><strong>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</strong></td>
-                                                    <td style={{ color: '#2E7D32', fontSize: 13 }}>{`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}</td>
+                                                     <td><strong>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</strong></td>
+                                                     <td style={{ color: '#2E7D32', fontSize: 13 }}>
+                                                         {editingAdvanceId === o.order_id ? (
+                                                             <div className="flex gap-4">
+                                                                 <input
+                                                                     type="number"
+                                                                     className="form-input"
+                                                                     style={{ width: 80, padding: '2px 4px', fontSize: 12, height: 28 }}
+                                                                     value={tempAdvanceValue}
+                                                                     onChange={e => setTempAdvanceValue(e.target.value)}
+                                                                     onKeyDown={e => e.key === 'Enter' && handleAdvanceUpdate(o.order_id)}
+                                                                     autoFocus
+                                                                 />
+                                                                 <button className="btn btn-sm btn-ghost p-0" onClick={() => handleAdvanceUpdate(o.order_id)}>
+                                                                     <Check size={14} color="#2E7D32" />
+                                                                 </button>
+                                                                 <button className="btn btn-sm btn-ghost p-0" onClick={() => setEditingAdvanceId(null)}>
+                                                                     <X size={14} color="#D32F2F" />
+                                                                 </button>
+                                                             </div>
+                                                         ) : (
+                                                             <div className="flex gap-4 items-center group">
+                                                                 {`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}
+                                                                 <button
+                                                                     className="btn btn-sm btn-ghost p-0 opacity-0 group-hover:opacity-100"
+                                                                     onClick={() => { setEditingAdvanceId(o.order_id); setTempAdvanceValue(o.advance_paid); }}
+                                                                 >
+                                                                     <Edit2 size={12} />
+                                                                 </button>
+                                                             </div>
+                                                         )}
+                                                     </td>
                                                     <td style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 600, fontSize: 13 }}>
                                                         {`\u20b9${parseFloat(o.balance_amount).toLocaleString('en-IN')}`}
                                                     </td>
@@ -281,10 +331,42 @@ export default function OrderHistory({ onMenuClick }) {
                                                         {formatDate(o.delivery_date)}
                                                     </span>
                                                 </div>
-                                                <div className="order-card-item">
-                                                    <span className="order-card-label">Total Amount</span>
-                                                    <span className="order-card-value" style={{ fontWeight: 700 }}>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</span>
-                                                </div>
+                                                 <div className="order-card-item">
+                                                     <span className="order-card-label">Advance</span>
+                                                     <span className="order-card-value" style={{ color: '#2E7D32' }}>
+                                                         {editingAdvanceId === o.order_id ? (
+                                                             <div className="flex gap-4 mt-4">
+                                                                 <input
+                                                                     type="number"
+                                                                     className="form-input"
+                                                                     style={{ width: 70, padding: '2px 4px', fontSize: 12, height: 28 }}
+                                                                     value={tempAdvanceValue}
+                                                                     onChange={e => setTempAdvanceValue(e.target.value)}
+                                                                 />
+                                                                 <button className="btn btn-sm btn-primary p-4" style={{ minHeight: 'auto' }} onClick={() => handleAdvanceUpdate(o.order_id)}>
+                                                                     <Check size={14} />
+                                                                 </button>
+                                                                 <button className="btn btn-sm btn-ghost p-4" style={{ minHeight: 'auto' }} onClick={() => setEditingAdvanceId(null)}>
+                                                                     <X size={14} />
+                                                                 </button>
+                                                             </div>
+                                                         ) : (
+                                                             <div className="flex-between w-full">
+                                                                 {`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}
+                                                                 <button
+                                                                     className="btn btn-sm btn-ghost p-0"
+                                                                     onClick={() => { setEditingAdvanceId(o.order_id); setTempAdvanceValue(o.advance_paid); }}
+                                                                 >
+                                                                     <Edit2 size={12} />
+                                                                 </button>
+                                                             </div>
+                                                         )}
+                                                     </span>
+                                                 </div>
+                                                 <div className="order-card-item">
+                                                     <span className="order-card-label">Total Amount</span>
+                                                     <span className="order-card-value" style={{ fontWeight: 700 }}>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</span>
+                                                 </div>
                                                 <div className="order-card-item">
                                                     <span className="order-card-label">Balance</span>
                                                     <span className="order-card-value" style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 700 }}>
