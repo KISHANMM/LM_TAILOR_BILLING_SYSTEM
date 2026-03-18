@@ -38,20 +38,17 @@ export default function Analytics({ onMenuClick }) {
 
     const fetchData = () => {
         setLoading(true);
-        Promise.all([
-            api.get('/analytics/summary'),
-            api.get('/analytics/expenses'),
-            api.get('/analytics/top-services'),
-            api.get('/analytics/top-customers')
-        ]).then(([sumRes, expRes, tsRes, tcRes]) => {
-            setSummary(sumRes.data);
-            setExpenses(expRes.data);
-            setTopServices(tsRes.data);
-            setTopCustomers(tcRes.data);
-        }).catch(err => {
-            toast.error('Failed to load analytics');
-            console.error(err);
-        }).finally(() => setLoading(false));
+        api.get('/analytics/dashboard')
+            .then(res => {
+                const { summary, expenses, services, customers } = res.data;
+                setSummary(summary);
+                setExpenses(expenses);
+                setTopServices(services);
+                setTopCustomers(customers);
+            }).catch(err => {
+                toast.error('Failed to load analytics');
+                console.error(err);
+            }).finally(() => setLoading(false));
     };
 
     useEffect(() => {

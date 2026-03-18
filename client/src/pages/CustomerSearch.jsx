@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu, LayoutGrid, List } from 'lucide-react';
 import api from '../api/axios';
@@ -52,8 +52,40 @@ export default function CustomerSearch({ onMenuClick }) {
         }
     }
 
+    const debouncedSearch = useCallback((q) => {
+        const handler = setTimeout(async () => {
+            if (!q) {
+                setResults([]);
+                setSearched(false);
+                return;
+            }
+            setLoading(true);
+            setSearched(true);
+            try {
+                const param = /^\d+$/.test(q) ? `phone=${q}` : `name=${q}`;
+                const res = await api.get(`/customers/search?${param}`);
+                setResults(res.data || []);
+            } catch {
+                setResults([]);
+            } finally {
+                setLoading(false);
+            }
+        }, 300);
+        return () => clearTimeout(handler);
+    }, []);
+
+    useEffect(() => {
+        if (query && !selected) {
+            return debouncedSearch(query);
+        } else if (!query) {
+            setResults([]);
+            setSearched(false);
+        }
+    }, [query, debouncedSearch, selected]);
+
     async function handleSearch(e) {
         e && e.preventDefault();
+        if (!query) return;
         setLoading(true);
         setSelected(null);
         setSearched(true);
@@ -172,12 +204,15 @@ export default function CustomerSearch({ onMenuClick }) {
                                     <input
                                         type="text"
                                         value={query}
-                                        onChange={e => setQuery(e.target.value)}
+                                        onChange={e => {
+                                            setQuery(e.target.value);
+                                            if (selected) setSelected(null); // Clear selection when typing to show live results
+                                        }}
                                         placeholder="Enter phone number or customer name..."
                                         autoFocus
                                     />
                                 </div>
-                                <button type="submit" className="btn btn-primary" disabled={!query || loading}>
+                                <button type="submit" className="btn btn-primary" disabled={!query || loading} style={{ display: 'none' }}>
                                     {loading ? 'Searching…' : 'Search'}
                                 </button>
                             </div>

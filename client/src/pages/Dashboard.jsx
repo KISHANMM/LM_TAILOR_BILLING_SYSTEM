@@ -10,11 +10,11 @@ import api from '../api/axios';
 
 function StatCard({ value, label, icon: Icon, colorClass, iconBg, iconColor }) {
     return (
-        <div className={`stat-card ${colorClass}`}>
+        <div className={`stat-card ${colorClass}`} style={{ height: '100%', minHeight: '140px', display: 'flex', flexDirection: 'column' }}>
             <div className="stat-icon" style={{ background: iconBg }}>
                 <Icon size={20} color={iconColor} />
             </div>
-            <div className="stat-value">{value}</div>
+            <div className="stat-value" style={{ flexGrow: 1 }}>{value ?? 0}</div>
             <div className="stat-label">{label}</div>
         </div>
     );
@@ -44,21 +44,24 @@ export default function Dashboard({ onMenuClick }) {
         api.get('/dashboard')
             .then(r => {
                 setData(r.data);
-                // Show notifications for due today
-                if (!notifiedRef.current && r.data.dueTodayOrders?.length > 0) {
-                    r.data.dueTodayOrders.forEach(order => {
-                        toast(`🚚 ${order.customer_name}'s delivery is due today!`, {
-                            duration: 6000,
-                            icon: '🗓️',
-                            style: {
-                                borderRadius: '10px',
-                                background: '#6A1E2E',
-                                color: '#fff',
-                                fontSize: '14px',
-                                fontWeight: '600'
-                            },
+                // Show notifications for due today and tomorrow
+                if (!notifiedRef.current) {
+                    if (r.data.dueTodayOrders?.length > 0) {
+                        r.data.dueTodayOrders.forEach(order => {
+                            toast(`🚚 ${order.customer_name}'s delivery is due today!`, {
+                                duration: 6000,
+                                icon: '🗓️',
+                                style: { borderRadius: '10px', background: '#6A1E2E', color: '#fff', fontSize: '14px', fontWeight: '600' },
+                            });
                         });
-                    });
+                    }
+                    if (r.data.dueTomorrowOrders?.length > 0) {
+                        toast(`🔔 ${r.data.dueTomorrowOrders.length} order(s) due tomorrow!`, {
+                            duration: 5000,
+                            icon: '⏰',
+                            style: { borderRadius: '10px', background: '#C6A75E', color: '#fff', fontSize: '14px', fontWeight: '600' },
+                        });
+                    }
                     notifiedRef.current = true;
                 }
             })
@@ -128,14 +131,11 @@ export default function Dashboard({ onMenuClick }) {
                             colorClass={`green ${activeTab === 'ready' ? 'active-stat' : ''}`}
                             iconBg="rgba(46,125,50,0.1)" iconColor="#2E7D32" />
                     </div>
-                    <StatCard
-                        value={`\u20b9${(data?.totalEarnings || 0).toLocaleString('en-IN')}`}
-                        label="Total Earnings"
-                        icon={TrendingUp}
-                        colorClass="blue"
-                        iconBg="rgba(21,101,192,0.1)"
-                        iconColor="#1565C0"
-                    />
+                    <div onClick={() => setActiveTab('dueTomorrow')} style={{ cursor: 'pointer' }}>
+                        <StatCard value={data?.dueTomorrow} label="Due Tomorrow" icon={AlertTriangle}
+                            colorClass={`blue ${activeTab === 'dueTomorrow' ? 'active-stat' : ''}`}
+                            iconBg="rgba(21,101,192,0.1)" iconColor="#1565C0" />
+                    </div>
                 </div>
 
                 <div className="grid-2 gap-16">
@@ -143,23 +143,28 @@ export default function Dashboard({ onMenuClick }) {
                         <div className="card-header">
                             <h3 className="card-title">
                                 {activeTab === 'dueToday' ? 'Due Today' :
-                                    activeTab === 'pending' ? 'Pending Orders' : 'Ready for Pickup'}
+                                    activeTab === 'dueTomorrow' ? 'Due Tomorrow' :
+                                        activeTab === 'pending' ? 'Pending Orders' : 'Ready for Pickup'}
                             </h3>
                             <span className={`badge ${activeTab === 'dueToday' ? 'badge-pending' :
+                                activeTab === 'dueTomorrow' ? 'badge-pending' :
                                     activeTab === 'pending' ? 'badge-pending' : 'badge-ready'
                                 }`}>
                                 {activeTab === 'dueToday' ? data?.dueToday :
-                                    activeTab === 'pending' ? data?.pendingCount : data?.readyCount} orders
+                                    activeTab === 'dueTomorrow' ? data?.dueTomorrow :
+                                        activeTab === 'pending' ? data?.pendingCount : data?.readyCount} orders
                             </span>
                         </div>
                         <div className="card-body" style={{ padding: 0 }}>
                             {((activeTab === 'dueToday' && !data?.dueTodayOrders?.length) ||
+                                (activeTab === 'dueTomorrow' && !data?.dueTomorrowOrders?.length) ||
                                 (activeTab === 'pending' && !data?.pendingOrders?.length) ||
                                 (activeTab === 'ready' && !data?.readyOrders?.length)) ? (
                                 <div className="empty-state" style={{ padding: '32px 24px' }}>
                                     <CheckCircle size={32} style={{ opacity: 0.3, display: 'block', margin: '0 auto 8px' }} />
                                     No {activeTab === 'dueToday' ? 'deliveries due today' :
-                                        activeTab === 'pending' ? 'pending orders' : 'orders ready for pickup'}
+                                        activeTab === 'dueTomorrow' ? 'deliveries due tomorrow' :
+                                            activeTab === 'pending' ? 'pending orders' : 'orders ready for pickup'}
                                 </div>
                             ) : (
                                 <div className="table-container" style={{ borderRadius: 0, border: 'none' }}>
@@ -171,7 +176,8 @@ export default function Dashboard({ onMenuClick }) {
                                         </thead>
                                         <tbody>
                                             {(activeTab === 'dueToday' ? data.dueTodayOrders :
-                                                activeTab === 'pending' ? data.pendingOrders : data.readyOrders).map(o => (
+                                                activeTab === 'dueTomorrow' ? data.dueTomorrowOrders :
+                                                    activeTab === 'pending' ? data.pendingOrders : data.readyOrders).map(o => (
                                                     <tr key={o.order_id}>
                                                         <td>
                                                             <Link to={`/customer/${o.customer_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>

@@ -95,7 +95,9 @@ async function initDB() {
       `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
       `CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)`,
       `CREATE INDEX IF NOT EXISTS idx_services_order_id ON services(order_id)`,
-      `CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)`
+      `CREATE INDEX IF NOT EXISTS idx_services_service_type ON services(service_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)`,
+      `CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category)`
     ], "write");
     console.log('✅ Batch execution successful');
 
