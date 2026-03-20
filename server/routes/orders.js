@@ -57,26 +57,39 @@ router.post('/', async (req, res) => {
             return res.status(200).json({ order_id: existingId, total_amount, advance_paid: advance, balance_amount, duplicate: true });
         }
 
-        const mainBatch = [];
-
-        // Update/Insert measurements if provided
+        // Save/Update measurements if provided (SELECT then INSERT or UPDATE to avoid ON CONFLICT dependency)
         if (measurements && Object.keys(measurements).length > 0) {
-            const m = measurements;
-            mainBatch.push({
-                sql: `INSERT INTO measurements (customer_id, length, shoulder, chest, waist, dot, back_neck, front_neck, sleeves_length, armhole, chest_distance, sleeves_round)
-                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-                      ON CONFLICT(customer_id) DO UPDATE SET
-                      length=excluded.length, shoulder=excluded.shoulder, chest=excluded.chest, waist=excluded.waist, dot=excluded.dot,
-                      back_neck=excluded.back_neck, front_neck=excluded.front_neck, sleeves_length=excluded.sleeves_length,
-                      armhole=excluded.armhole, chest_distance=excluded.chest_distance, sleeves_round=excluded.sleeves_round,
-                      updated_at=datetime('now','localtime')`,
-                args: [
-                    cid, parseFloat(m.length || m.m_length) || null, parseFloat(m.shoulder) || null, parseFloat(m.chest) || null,
+            try {
+                const m = measurements;
+                const mArgs = [
+                    parseFloat(m.length || m.m_length) || null, parseFloat(m.shoulder) || null, parseFloat(m.chest) || null,
                     parseFloat(m.waist) || null, parseFloat(m.dot) || null, parseFloat(m.back_neck) || null,
                     parseFloat(m.front_neck) || null, parseFloat(m.sleeves_length) || null, parseFloat(m.armhole) || null,
                     parseFloat(m.chest_distance) || null, parseFloat(m.sleeves_round) || null
-                ]
-            });
+                ];
+
+                const existingM = await db.execute({
+                    sql: 'SELECT id FROM measurements WHERE customer_id = ? LIMIT 1',
+                    args: [cid]
+                });
+
+                if (existingM.rows.length > 0) {
+                    await db.execute({
+                        sql: `UPDATE measurements SET length=?, shoulder=?, chest=?, waist=?, dot=?, back_neck=?, front_neck=?,
+                              sleeves_length=?, armhole=?, chest_distance=?, sleeves_round=?, updated_at=datetime('now','localtime')
+                              WHERE customer_id=?`,
+                        args: [...mArgs, cid]
+                    });
+                } else {
+                    await db.execute({
+                        sql: `INSERT INTO measurements (customer_id, length, shoulder, chest, waist, dot, back_neck, front_neck, sleeves_length, armhole, chest_distance, sleeves_round)
+                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                        args: [cid, ...mArgs]
+                    });
+                }
+            } catch (measErr) {
+                console.error('Measurement save error (non-fatal):', measErr.message);
+            }
         }
 
         // Insert Order
@@ -115,8 +128,7 @@ router.post('/', async (req, res) => {
             });
         }
 
-        // Execute all related inserts in one batch
-        if (mainBatch.length > 0) await db.batch(mainBatch, "write");
+        // Execute services, images, voice notes
         if (secondaryBatch.length > 0) await db.batch(secondaryBatch, "write");
 
         res.status(201).json({ order_id: orderId, total_amount, advance_paid: advance, balance_amount });

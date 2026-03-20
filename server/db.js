@@ -136,6 +136,23 @@ async function initDB() {
       console.log('✅ Added payment_method column to orders table');
     } catch (e) { }
 
+    // Ensure measurements has a unique constraint on customer_id (required for ON CONFLICT upsert)
+    try {
+      // Remove duplicate measurement rows — keep only the most recent one per customer
+      await db.execute(`
+        DELETE FROM measurements
+        WHERE id NOT IN (
+          SELECT MAX(id) FROM measurements GROUP BY customer_id
+        )
+      `);
+      console.log('✅ Cleaned duplicate measurement rows');
+    } catch (e) { console.log('ℹ️ Measurement dedup skipped:', e.message); }
+
+    try {
+      await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_measurements_customer_id ON measurements(customer_id)');
+      console.log('✅ Unique index on measurements(customer_id) ensured');
+    } catch (e) { console.log('ℹ️ Measurement unique index skipped:', e.message); }
+
     console.log('✅ Database Initialized (' + (isLocal ? 'Local' : 'Cloud') + ')');
   } catch (err) {
     console.error('❌ Database Initialization Error Details:', err);
