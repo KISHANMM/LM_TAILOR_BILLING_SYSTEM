@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Download, Share2, Printer, ChevronLeft, CheckCircle, Clock, Menu, Image as ImageIcon, X } from 'lucide-react';
+import { Download, Share2, Printer, ChevronLeft, CheckCircle, Clock, Menu, Image as ImageIcon, X, Mic } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 
@@ -299,19 +299,7 @@ export default function BillPreview({ onMenuClick }) {
                                 </div>
                             )}
 
-                            {/* Voice Notes */}
-                            {voiceNotes.length > 0 && (
-                                <div className="bill-section no-print" style={{ borderTop: '1px solid var(--gray-light)' }}>
-                                    <span style={{ fontSize: 11, color: 'var(--maroon)', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: 8, letterSpacing: '0.05em' }}>
-                                        Voice Instructions
-                                    </span>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                        {voiceNotes.map(vn => (
-                                            <audio key={vn.id} src={vn.audio_data} controls style={{ width: '100%', height: 36, outline: 'none', borderRadius: 8 }} />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+
 
                             {/* Footer */}
                             <div style={{ background: 'var(--maroon-dark)', color: 'rgba(198,167,94,0.6)', textAlign: 'center', padding: '14px 20px', fontSize: 11, borderTop: '2px solid var(--gold)' }}>
@@ -332,6 +320,30 @@ export default function BillPreview({ onMenuClick }) {
                                             onClick={() => setPreviewImage(img.image_data)}
                                             style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', border: '1px solid var(--gray-light)' }}>
                                             <img src={img.image_data} alt="Design Reference" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Voice Notes — Standalone Card (Not Printed) */}
+                        {voiceNotes.length > 0 && (
+                            <div className="no-print" style={{ marginTop: 24, background: '#fff', padding: 20, borderRadius: 12, border: '2px solid #FFCDD2' }}>
+                                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#B71C1C', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Mic size={18} color="#D32F2F" /> Voice Instructions
+                                </h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {voiceNotes.map((vn, idx) => (
+                                        <div key={vn.id} style={{ background: '#FFEBEE', borderRadius: 10, padding: '10px 14px', border: '1px solid #FFCDD2' }}>
+                                            <div style={{ fontSize: 12, color: '#B71C1C', marginBottom: 6, fontWeight: 600 }}>
+                                                🎙️ Recording {voiceNotes.length > 1 ? `#${idx + 1}` : ''}
+                                                {vn.duration ? ` · ${Math.floor(vn.duration / 60)}:${String(vn.duration % 60).padStart(2, '0')}` : ''}
+                                            </div>
+                                            <audio
+                                                src={vn.audio_data}
+                                                controls
+                                                style={{ width: '100%', height: 40, outline: 'none', borderRadius: 8 }}
+                                            />
                                         </div>
                                     ))}
                                 </div>
