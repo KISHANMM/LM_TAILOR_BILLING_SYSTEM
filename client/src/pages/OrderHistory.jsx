@@ -46,18 +46,54 @@ export default function OrderHistory({ onMenuClick }) {
     }, [search, statusFilter, dateFilter]);
 
     async function handleStatusChange(orderId, newStatus) {
+        // If marking as Delivered and balance is outstanding, ask about payment
+        if (newStatus === 'Delivered') {
+            const order = orders.find(o => o.order_id === orderId);
+            const balance = order ? parseFloat(order.balance_amount) : 0;
+            if (balance > 0) {
+                const balanceCleared = window.confirm(
+                    `Balance of ₹${balance.toLocaleString('en-IN')} is still pending. Has the customer cleared the full payment?`
+                );
+                
+                // If they click cancel, abort the status change entirely
+                if (!balanceCleared) {
+                    return;
+                }
+
+                setUpdatingId(orderId);
+                try {
+                    await api.put(`/orders/${orderId}/status`, { status: newStatus });
+                    await api.put(`/orders/${orderId}`, {
+                        advance_paid: order.total_amount,
+                        services: order.services
+                    });
+                    const updated = orders.map(o => {
+                        if (o.order_id === orderId) {
+                            return {
+                                ...o,
+                                status: newStatus,
+                                advance_paid: order.total_amount,
+                                balance_amount: 0
+                            };
+                        }
+                        return o;
+                    });
+                    setOrders(updated);
+                } catch (err) {
+                    console.error('Status update failed:', err);
+                } finally {
+                    setUpdatingId(null);
+                }
+                return;
+            }
+        }
+
         setUpdatingId(orderId);
         try {
             await api.put(`/orders/${orderId}/status`, { status: newStatus });
             const updated = orders.map(o => {
                 if (o.order_id === orderId) {
-                    const isDelivered = newStatus === 'Delivered';
-                    return { 
-                        ...o, 
-                        status: newStatus, 
-                        advance_paid: isDelivered ? o.total_amount : o.advance_paid, 
-                        balance_amount: isDelivered ? 0 : o.balance_amount 
-                    };
+                    return { ...o, status: newStatus };
                 }
                 return o;
             });

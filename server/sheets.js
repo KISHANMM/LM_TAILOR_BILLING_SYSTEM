@@ -14,6 +14,8 @@ const HEADERS = [
     'LENGTH', 'SHOULDER', 'CHEST', 'WAIST', 'DOT',
     'BACK NECK', 'FRONT NECK', 'SLEEVES LEN.', 'ARMHOLE',
     'CHEST DIST.', 'SLEEVES ROUND',
+    'T-LENGTH', 'T-SHOULDER', 'T-CHEST', 'T-WAIST', 'T-BACK NECK', 'T-FRONT NECK', 'T-SLEEVES LEN.', 'T-ROUND', 'T-HALF BODY', 'T-HIP',
+    'B-LENGTH', 'B-ROUND', 'B-HIP', 'B-FLY', 'B-THAI', 'B-KNEE',
     'NOTES', 'CREATED AT'
 ];
 
@@ -164,6 +166,22 @@ async function appendOrderToSheet(data) {
             measurements.armhole || '',
             measurements.chest_distance || '',
             measurements.sleeves_round || '',
+            measurements.t_length || '',
+            measurements.t_shoulder || '',
+            measurements.t_chest || '',
+            measurements.t_waist || '',
+            measurements.t_back_neck || '',
+            measurements.t_front_neck || '',
+            measurements.t_sleeves_length || '',
+            measurements.t_sleeves_round || '',
+            measurements.t_half_body || '',
+            measurements.t_hip || '',
+            measurements.b_length || '',
+            measurements.b_bottom_round || '',
+            measurements.b_hip || '',
+            measurements.b_fly || '',
+            measurements.b_thai || '',
+            measurements.b_knee || '',
             notes || '',
             created_at || new Date().toLocaleString('en-IN'),
         ];

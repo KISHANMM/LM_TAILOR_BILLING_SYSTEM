@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const { db, isLocal } = require('../db');
 const { appendOrderToSheet } = require('../sheets');
 
 // POST /api/orders
@@ -65,7 +65,12 @@ router.post('/', async (req, res) => {
                     parseFloat(m.length || m.m_length) || null, parseFloat(m.shoulder) || null, parseFloat(m.chest) || null,
                     parseFloat(m.waist) || null, parseFloat(m.dot) || null, parseFloat(m.back_neck) || null,
                     parseFloat(m.front_neck) || null, parseFloat(m.sleeves_length) || null, parseFloat(m.armhole) || null,
-                    parseFloat(m.chest_distance) || null, parseFloat(m.sleeves_round) || null
+                    parseFloat(m.chest_distance) || null, parseFloat(m.sleeves_round) || null,
+                    parseFloat(m.t_length) || null, parseFloat(m.t_shoulder) || null, parseFloat(m.t_chest) || null,
+                    parseFloat(m.t_waist) || null, parseFloat(m.t_back_neck) || null, parseFloat(m.t_front_neck) || null,
+                    parseFloat(m.t_sleeves_length) || null, parseFloat(m.t_sleeves_round) || null, parseFloat(m.t_half_body) || null, parseFloat(m.t_hip) || null,
+                    parseFloat(m.b_length) || null, parseFloat(m.b_bottom_round) || null, parseFloat(m.b_hip) || null,
+                    parseFloat(m.b_fly) || null, parseFloat(m.b_thai) || null, parseFloat(m.b_knee) || null
                 ];
 
                 const existingM = await db.execute({
@@ -75,15 +80,22 @@ router.post('/', async (req, res) => {
 
                 if (existingM.rows.length > 0) {
                     await db.execute({
-                        sql: `UPDATE measurements SET length=?, shoulder=?, chest=?, waist=?, dot=?, back_neck=?, front_neck=?,
-                              sleeves_length=?, armhole=?, chest_distance=?, sleeves_round=?, updated_at=datetime('now','localtime')
+                        sql: `UPDATE measurements SET 
+                              length=?, shoulder=?, chest=?, waist=?, dot=?, back_neck=?, front_neck=?, sleeves_length=?, armhole=?, chest_distance=?, sleeves_round=?,
+                              t_length=?, t_shoulder=?, t_chest=?, t_waist=?, t_back_neck=?, t_front_neck=?, t_sleeves_length=?, t_sleeves_round=?, t_half_body=?, t_hip=?,
+                              b_length=?, b_bottom_round=?, b_hip=?, b_fly=?, b_thai=?, b_knee=?,
+                              updated_at=datetime('now','localtime')
                               WHERE customer_id=?`,
                         args: [...mArgs, cid]
                     });
                 } else {
                     await db.execute({
-                        sql: `INSERT INTO measurements (customer_id, length, shoulder, chest, waist, dot, back_neck, front_neck, sleeves_length, armhole, chest_distance, sleeves_round)
-                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                        sql: `INSERT INTO measurements (
+                                customer_id, length, shoulder, chest, waist, dot, back_neck, front_neck, sleeves_length, armhole, chest_distance, sleeves_round,
+                                t_length, t_shoulder, t_chest, t_waist, t_back_neck, t_front_neck, t_sleeves_length, t_sleeves_round, t_half_body, t_hip,
+                                b_length, b_bottom_round, b_hip, b_fly, b_thai, b_knee
+                              )
+                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                         args: [cid, ...mArgs]
                     });
                 }
@@ -136,6 +148,10 @@ router.post('/', async (req, res) => {
         // ── Google Sheets backup (non-blocking) ──────────────────────────
         // Fetch measurements for the sheet (best-effort, don't block response)
         setImmediate(async () => {
+            if (isLocal) {
+                console.log('[Sheets] 🏠 Local development detected — skipping background backup');
+                return;
+            }
             try {
                 const measRs = await db.execute({
                     sql: 'SELECT * FROM measurements WHERE customer_id = ?',

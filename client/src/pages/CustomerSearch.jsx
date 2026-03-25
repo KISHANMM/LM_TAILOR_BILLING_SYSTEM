@@ -3,12 +3,22 @@ import { Link, useParams } from 'react-router-dom';
 import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu, LayoutGrid, List } from 'lucide-react';
 import api from '../api/axios';
 
-const MEASUREMENT_LABELS = {
+const BLOUSE_LABELS = {
     m_length: 'Length', shoulder: 'Shoulder', chest: 'Chest', waist: 'Waist',
     dot: 'Dot', back_neck: 'Back Neck', front_neck: 'Front Neck',
     sleeves_length: 'Sleeves Length', armhole: 'Armhole',
     chest_distance: 'Chest Distance', sleeves_round: 'Sleeves Round',
 };
+
+const CHUDHIDHAR_LABELS = {
+    t_length: 'Length', t_shoulder: 'Shoulder', t_chest: 'Chest', t_waist: 'Waist',
+    t_back_neck: 'Back Neck', t_front_neck: 'Front Neck', t_sleeves_length: 'Sleeves Length',
+    t_sleeves_round: 'Round', t_half_body: 'Half Body', t_hip: 'HIP',
+    b_length: 'B-Length (BL)', b_bottom_round: 'B-Round (BR)', b_hip: 'B-Hip (HP)',
+    b_fly: 'B-Fly (FLY)', b_thai: 'B-Thai', b_knee: 'B-Knee'
+};
+
+const ALL_LABELS = { ...BLOUSE_LABELS, ...CHUDHIDHAR_LABELS };
 
 function StatusBadge({ status }) {
     const cls = { Pending: 'badge badge-pending', Ready: 'badge badge-ready', Delivered: 'badge badge-delivered' }[status] || 'badge';
@@ -32,6 +42,7 @@ export default function CustomerSearch({ onMenuClick }) {
     const [isEditingInfo, setIsEditingInfo] = useState(false);
     const [editInfoForm, setEditInfoForm] = useState({});
     const [viewMode, setViewMode] = useState(window.innerWidth < 768 ? 'cards' : 'table');
+    const [activeTab, setActiveTab] = useState('BLOUSE'); // 'BLOUSE' or 'CHUDHIDHAR'
 
     useEffect(() => {
         if (id) {
@@ -111,19 +122,11 @@ export default function CustomerSearch({ onMenuClick }) {
     }
 
     function handleStartEdit() {
-        setEditForm({
-            m_length: selected.m_length,
-            shoulder: selected.shoulder,
-            chest: selected.chest,
-            waist: selected.waist,
-            dot: selected.dot,
-            back_neck: selected.back_neck,
-            front_neck: selected.front_neck,
-            sleeves_length: selected.sleeves_length,
-            armhole: selected.armhole,
-            chest_distance: selected.chest_distance,
-            sleeves_round: selected.sleeves_round
+        const form = {};
+        Object.keys(ALL_LABELS).forEach(k => {
+            form[k] = selected[k] !== null && selected[k] !== undefined ? selected[k] : '';
         });
+        setEditForm(form);
         setIsEditing(true);
     }
 
@@ -359,38 +362,49 @@ export default function CustomerSearch({ onMenuClick }) {
                                     )}
                                 </div>
                                 <div className="card-body">
-                                    {(isEditing || Object.keys(MEASUREMENT_LABELS).some(k => selected[k] != null)) ? (
-                                        <div className="grid-2" style={{ gap: 10 }}>
-                                            {Object.entries(MEASUREMENT_LABELS).map(([key, label]) => (
-                                                <div key={key} className="flex-between" style={{ padding: '4px 8px', background: 'var(--ivory)', borderRadius: 6 }}>
-                                                    <span style={{ fontSize: 12, color: 'var(--gray)' }}>{label}</span>
-                                                    {isEditing ? (
-                                                        <input
-                                                            type="number"
-                                                            step="0.1"
-                                                            value={editForm[key] || ''}
-                                                            onChange={e => setEditForm({ ...editForm, [key]: e.target.value })}
-                                                            style={{
-                                                                width: 70,
-                                                                height: 24,
-                                                                fontSize: 13,
-                                                                border: '1px solid var(--gold-pale)',
-                                                                borderRadius: 4,
-                                                                padding: '0 4px',
-                                                                background: 'white'
-                                                            }}
-                                                        />
-                                                    ) : (
-                                                        <strong style={{ fontSize: 13 }}>{selected[key] != null ? `${selected[key]}"` : '-'}</strong>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="empty-state" style={{ padding: '16px 0' }}>
-                                            No measurements recorded yet
-                                        </div>
-                                    )}
+                                    {/* Tabs */}
+                                    <div style={{ display: 'flex', gap: 8, marginBottom: 16, borderBottom: '1px solid var(--gray-light)', paddingBottom: 16, overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                                        <button className={`btn btn-sm ${activeTab === 'BLOUSE' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('BLOUSE')} style={{ fontSize: 11 }}>BLOUSE</button>
+                                        <button className={`btn btn-sm ${activeTab === 'CHUDHIDHAR' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('CHUDHIDHAR')} style={{ fontSize: 11 }}>CHUDHIDHAR</button>
+                                    </div>
+
+                                    {(() => {
+                                        const labels = activeTab === 'BLOUSE' ? BLOUSE_LABELS : CHUDHIDHAR_LABELS;
+                                        const hasData = Object.keys(labels).some(k => selected[k] != null && selected[k] !== '');
+                                        
+                                        if (!isEditing && !hasData) {
+                                            return <div className="empty-state" style={{ padding: '16px 0', fontSize: 13 }}>No {activeTab.toLowerCase()} measurements recorded</div>;
+                                        }
+
+                                        return (
+                                            <div className="grid-2" style={{ gap: 10 }}>
+                                                {Object.entries(labels).map(([key, label]) => (
+                                                    <div key={key} className="flex-between" style={{ padding: '4px 8px', background: 'var(--ivory)', borderRadius: 6 }}>
+                                                        <span style={{ fontSize: 12, color: 'var(--gray)' }}>{label}</span>
+                                                        {isEditing ? (
+                                                            <input
+                                                                type="number"
+                                                                step="0.1"
+                                                                value={editForm[key] || ''}
+                                                                onChange={e => setEditForm({ ...editForm, [key]: e.target.value })}
+                                                                style={{
+                                                                    width: 70,
+                                                                    height: 24,
+                                                                    fontSize: 13,
+                                                                    border: '1px solid var(--gold-pale)',
+                                                                    borderRadius: 4,
+                                                                    padding: '0 4px',
+                                                                    background: 'white'
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <strong style={{ fontSize: 13 }}>{selected[key] != null && selected[key] !== '' ? `${selected[key]}"` : '-'}</strong>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>

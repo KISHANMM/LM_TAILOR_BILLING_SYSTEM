@@ -112,7 +112,12 @@ async function initDB() {
       }
     }
 
-    // Add new measurement fields if they don't exist
+    // Add basic measurement fields if they don't exist
+    try {
+      await db.execute('ALTER TABLE measurements ADD COLUMN length REAL');
+      console.log('✅ Added length column to measurements table');
+    } catch (e) { }
+
     try {
       await db.execute('ALTER TABLE measurements ADD COLUMN chest_distance REAL');
       console.log('✅ Added chest_distance column to measurements table');
@@ -135,6 +140,18 @@ async function initDB() {
       await db.execute('ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT "Cash"');
       console.log('✅ Added payment_method column to orders table');
     } catch (e) { }
+    
+    // TOP Measurements
+    const topFields = ['t_length', 't_shoulder', 't_chest', 't_waist', 't_back_neck', 't_front_neck', 't_sleeves_length', 't_sleeves_round', 't_half_body', 't_hip'];
+    for (const f of topFields) {
+      try { await db.execute(`ALTER TABLE measurements ADD COLUMN ${f} REAL`); console.log(`✅ Added ${f} to measurements`); } catch (e) { }
+    }
+
+    // BOTTOM Measurements
+    const bottomFields = ['b_length', 'b_bottom_round', 'b_hip', 'b_fly', 'b_thai', 'b_knee'];
+    for (const f of bottomFields) {
+      try { await db.execute(`ALTER TABLE measurements ADD COLUMN ${f} REAL`); console.log(`✅ Added ${f} to measurements`); } catch (e) { }
+    }
 
     // Ensure measurements has a unique constraint on customer_id (required for ON CONFLICT upsert)
     try {
@@ -159,4 +176,4 @@ async function initDB() {
   }
 }
 
-module.exports = { db, initDB };
+module.exports = { db, initDB, isLocal };

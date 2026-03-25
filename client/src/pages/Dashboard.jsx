@@ -37,7 +37,7 @@ function formatDate(d) {
 export default function Dashboard({ onMenuClick }) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('dueToday'); // 'dueToday', 'pending', 'ready'
+    const [activeTab, setActiveTab] = useState('dueToday'); // 'dueToday', 'pending', 'ready', 'dueTomorrow', 'overdue'
     const notifiedRef = React.useRef(false);
 
     useEffect(() => {
@@ -109,7 +109,7 @@ export default function Dashboard({ onMenuClick }) {
 
             <div className="page-container">
                 {data?.overdueCount > 0 && (
-                    <div className="alert alert-warning flex gap-8 mb-16">
+                    <div className="alert alert-warning flex gap-8 mb-16" onClick={() => setActiveTab('overdue')} style={{ cursor: 'pointer' }}>
                         <AlertTriangle size={16} />
                         <strong>{data.overdueCount} order(s)</strong>&nbsp;are overdue and not yet delivered!
                     </div>
@@ -144,27 +144,32 @@ export default function Dashboard({ onMenuClick }) {
                             <h3 className="card-title">
                                 {activeTab === 'dueToday' ? 'Due Today' :
                                     activeTab === 'dueTomorrow' ? 'Due Tomorrow' :
-                                        activeTab === 'pending' ? 'Pending Orders' : 'Ready for Pickup'}
+                                        activeTab === 'pending' ? 'Pending Orders' : 
+                                            activeTab === 'overdue' ? 'Overdue Orders' : 'Ready for Pickup'}
                             </h3>
                             <span className={`badge ${activeTab === 'dueToday' ? 'badge-pending' :
                                 activeTab === 'dueTomorrow' ? 'badge-pending' :
-                                    activeTab === 'pending' ? 'badge-pending' : 'badge-ready'
+                                    activeTab === 'pending' ? 'badge-pending' : 
+                                        activeTab === 'overdue' ? 'badge-pending' : 'badge-ready'
                                 }`}>
                                 {activeTab === 'dueToday' ? data?.dueToday :
                                     activeTab === 'dueTomorrow' ? data?.dueTomorrow :
-                                        activeTab === 'pending' ? data?.pendingCount : data?.readyCount} orders
+                                        activeTab === 'pending' ? data?.pendingCount : 
+                                            activeTab === 'overdue' ? data?.overdueCount : data?.readyCount} orders
                             </span>
                         </div>
                         <div className="card-body" style={{ padding: 0 }}>
-                            {((activeTab === 'dueToday' && !data?.dueTodayOrders?.length) ||
+                             {((activeTab === 'dueToday' && !data?.dueTodayOrders?.length) ||
                                 (activeTab === 'dueTomorrow' && !data?.dueTomorrowOrders?.length) ||
                                 (activeTab === 'pending' && !data?.pendingOrders?.length) ||
+                                (activeTab === 'overdue' && !data?.overdueOrders?.length) ||
                                 (activeTab === 'ready' && !data?.readyOrders?.length)) ? (
                                 <div className="empty-state" style={{ padding: '32px 24px' }}>
                                     <CheckCircle size={32} style={{ opacity: 0.3, display: 'block', margin: '0 auto 8px' }} />
                                     No {activeTab === 'dueToday' ? 'deliveries due today' :
                                         activeTab === 'dueTomorrow' ? 'deliveries due tomorrow' :
-                                            activeTab === 'pending' ? 'pending orders' : 'orders ready for pickup'}
+                                            activeTab === 'pending' ? 'pending orders' : 
+                                                activeTab === 'overdue' ? 'overdue orders' : 'orders ready for pickup'}
                                 </div>
                             ) : (
                                 <div className="table-container" style={{ borderRadius: 0, border: 'none' }}>
@@ -175,9 +180,10 @@ export default function Dashboard({ onMenuClick }) {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {(activeTab === 'dueToday' ? data.dueTodayOrders :
+                                             {(activeTab === 'dueToday' ? data.dueTodayOrders :
                                                 activeTab === 'dueTomorrow' ? data.dueTomorrowOrders :
-                                                    activeTab === 'pending' ? data.pendingOrders : data.readyOrders).map(o => (
+                                                    activeTab === 'pending' ? data.pendingOrders : 
+                                                        activeTab === 'overdue' ? data.overdueOrders : data.readyOrders).map(o => (
                                                     <tr key={o.order_id}>
                                                         <td>
                                                             <Link to={`/customer/${o.customer_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
@@ -187,9 +193,14 @@ export default function Dashboard({ onMenuClick }) {
                                                         <td style={{ fontSize: 12 }}>{o.phone_number}</td>
                                                         <td><StatusBadge status={o.status} /></td>
                                                         <td>
-                                                            <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
-                                                                <Eye size={12} /> View
-                                                            </Link>
+                                                            <div className="flex gap-8">
+                                                                <Link to={`/customer/${o.customer_id}`} className="btn btn-sm btn-ghost p-4" title="View Measurements">
+                                                                    <Users size={14} />
+                                                                </Link>
+                                                                <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
+                                                                    <Eye size={12} /> View
+                                                                </Link>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -212,7 +223,8 @@ export default function Dashboard({ onMenuClick }) {
                                     { icon: DollarSign, color: '#2E7D32', label: 'Advance Collected', val: `\u20b9${(data?.totalAdvance || 0).toLocaleString('en-IN')}` },
                                     { icon: AlertTriangle, color: '#E65100', label: 'Overdue', val: data?.overdueCount },
                                 ].map(({ icon: Ic, color, label, val }, i) => (
-                                    <div key={i} className="flex-between" style={{ padding: '8px 0', borderBottom: i < 3 ? '1px solid var(--gray-light)' : 'none' }}>
+                                    <div key={i} className="flex-between" style={{ padding: '8px 0', borderBottom: i < 3 ? '1px solid var(--gray-light)' : 'none', cursor: label === 'Overdue' ? 'pointer' : 'default' }}
+                                        onClick={() => label === 'Overdue' ? setActiveTab('overdue') : null}>
                                         <span className="flex gap-8"><Ic size={15} color={color} />{label}</span>
                                         <strong>{val}</strong>
                                     </div>
@@ -274,9 +286,14 @@ export default function Dashboard({ onMenuClick }) {
                                         <td><strong>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</strong></td>
                                         <td><StatusBadge status={o.status} /></td>
                                         <td>
-                                            <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
-                                                <Eye size={12} /> Bill
-                                            </Link>
+                                            <div className="flex gap-8">
+                                                <Link to={`/customer/${o.customer_id}`} className="btn btn-sm btn-ghost p-4" title="View Measurements">
+                                                    <Users size={14} />
+                                                </Link>
+                                                <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
+                                                    <Eye size={12} /> Bill
+                                                </Link>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
