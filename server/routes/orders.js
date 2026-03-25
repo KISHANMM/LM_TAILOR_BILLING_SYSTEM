@@ -148,10 +148,6 @@ router.post('/', async (req, res) => {
         // ── Google Sheets backup (non-blocking) ──────────────────────────
         // Fetch measurements for the sheet (best-effort, don't block response)
         setImmediate(async () => {
-            if (isLocal) {
-                console.log('[Sheets] 🏠 Local development detected — skipping background backup');
-                return;
-            }
             try {
                 const measRs = await db.execute({
                     sql: 'SELECT * FROM measurements WHERE customer_id = ?',

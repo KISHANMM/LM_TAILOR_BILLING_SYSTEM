@@ -155,7 +155,7 @@ async function appendOrderToSheet(data) {
             payment_method || 'Cash',
             assigned_worker || '',
             measurement_type || '',
-            measurements.length || measurements.m_length || '',
+            measurements['length'] || measurements.m_length || '',
             measurements.shoulder || '',
             measurements.chest || '',
             measurements.waist || '',
