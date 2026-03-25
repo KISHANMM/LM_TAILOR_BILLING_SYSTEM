@@ -55,6 +55,21 @@ export default function WorkerDashboard({ onMenuClick, auth }) {
         }
     };
 
+    const handleWhatsAppReady = (order) => {
+        let phoneForUrl = order.phone_number.replace(/\D/g, '');
+        if (phoneForUrl.length === 10) phoneForUrl = '91' + phoneForUrl;
+
+        const msg = encodeURIComponent(
+            `Dear ${order.customer_name},\n\n` +
+            `Your blouse is ready to collect!\n\n` +
+            `Order No: #${String(order.order_id).padStart(4, '0')}\n` +
+            `Balance Amount: ₹${order.balance_amount.toLocaleString('en-IN')}\n\n` +
+            `*( Reminder : Please Give us a Call Before Coming to Shop at +919916562127 )*\n\n` +
+            `Please visit us soon. – L.M. Ladies Tailor`
+        );
+        window.open(`https://wa.me/${phoneForUrl}?text=${msg}`, '_blank');
+    };
+
     const handleStatusUpdate = async (e, orderId, newStatus) => {
         e.stopPropagation(); // Prevent accordion from toggling
         if (updatingId) return;
@@ -62,6 +77,13 @@ export default function WorkerDashboard({ onMenuClick, auth }) {
         try {
             setUpdatingId(orderId);
             await api.put(`/orders/${orderId}`, { status: newStatus });
+            
+            // Trigger WhatsApp if status becomes 'Ready'
+            if (newStatus === 'Ready') {
+                const targetOrder = orders.find(o => o.order_id === orderId);
+                if (targetOrder) handleWhatsAppReady(targetOrder);
+            }
+
             toast.success(`Order marked as ${newStatus}`);
             fetchOrders();
         } catch (error) {

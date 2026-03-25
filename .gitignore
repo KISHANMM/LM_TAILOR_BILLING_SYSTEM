@@ -13,3 +13,8 @@ lm-tailor-*.json
 
 # Local project context (contains credentials)
 project_context.md
+
+# Backups
+*.csv
+*backup*.json
+*backup*.xml

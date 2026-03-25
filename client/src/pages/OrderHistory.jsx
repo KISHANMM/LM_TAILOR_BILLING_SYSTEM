@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List, Edit2, Check, X } from 'lucide-react';
+import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List, Edit2, Check, X, User } from 'lucide-react';
 import api from '../api/axios';
 
 function StatusBadge({ status }) {
@@ -49,8 +49,30 @@ export default function OrderHistory({ onMenuClick }) {
         setUpdatingId(orderId);
         try {
             await api.put(`/orders/${orderId}/status`, { status: newStatus });
-            setOrders(prev => prev.map(o => o.order_id === orderId ? { ...o, status: newStatus, advance_paid: newStatus === 'Delivered' ? o.total_amount : o.advance_paid, balance_amount: newStatus === 'Delivered' ? 0 : o.balance_amount } : o));
-        } catch { /* silent */ } finally {
+            const updated = orders.map(o => {
+                if (o.order_id === orderId) {
+                    const isDelivered = newStatus === 'Delivered';
+                    return { 
+                        ...o, 
+                        status: newStatus, 
+                        advance_paid: isDelivered ? o.total_amount : o.advance_paid, 
+                        balance_amount: isDelivered ? 0 : o.balance_amount 
+                    };
+                }
+                return o;
+            });
+            setOrders(updated);
+
+            // Trigger WhatsApp if status becomes 'Ready'
+            if (newStatus === 'Ready') {
+                const targetOrder = updated.find(o => o.order_id === orderId);
+                if (targetOrder) {
+                    handleWhatsAppReady(targetOrder);
+                }
+            }
+        } catch (err) {
+            console.error('Status update failed:', err);
+        } finally {
             setUpdatingId(null);
         }
     }
@@ -74,6 +96,23 @@ export default function OrderHistory({ onMenuClick }) {
     }
 
     const filtered = orders;
+
+    const handleWhatsAppReady = (order) => {
+        let phoneForUrl = order.phone_number.replace(/\D/g, '');
+        if (phoneForUrl.length === 10) {
+            phoneForUrl = '91' + phoneForUrl;
+        }
+
+        const msg = encodeURIComponent(
+            `Dear ${order.customer_name},\n\n` +
+            `Your blouse is ready to collect!\n\n` +
+            `Order No: #${String(order.order_id).padStart(4, '0')}\n` +
+            `Balance Amount: ₹${order.balance_amount.toLocaleString('en-IN')}\n\n` +
+            `*( Reminder : Please Give us a Call Before Coming to Shop at +919916562127 )*\n\n` +
+            `Please visit us soon. – L.M. Ladies Tailor`
+        );
+        window.open(`https://wa.me/${phoneForUrl}?text=${msg}`, '_blank');
+    };
 
     const handleWhatsAppReview = (order) => {
         let phoneForUrl = order.phone_number.replace(/\D/g, '');
@@ -105,12 +144,12 @@ export default function OrderHistory({ onMenuClick }) {
                         <div className="topbar-subtitle">{filtered.length} order(s) found</div>
                     </div>
                 </div>
-                <div className="flex gap-12">
-                    <div className="flex gap-4 p-4" style={{ background: 'var(--gray-light)', borderRadius: 8 }}>
+                <div className="flex gap-8" style={{ flexWrap: 'nowrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <div className="flex gap-2 p-2" style={{ background: 'var(--gray-light)', borderRadius: 6, flexShrink: 0 }}>
                         <button
                             className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-ghost'}`}
                             onClick={() => setViewMode('table')}
-                            style={{ padding: '6px 10px', minHeight: 'auto', border: 'none' }}
+                            style={{ padding: '4px 8px', minHeight: 'auto', border: 'none' }}
                             title="Table View"
                         >
                             <List size={14} />
@@ -118,39 +157,39 @@ export default function OrderHistory({ onMenuClick }) {
                         <button
                             className={`btn btn-sm ${viewMode === 'cards' ? 'btn-primary' : 'btn-ghost'}`}
                             onClick={() => setViewMode('cards')}
-                            style={{ padding: '6px 10px', minHeight: 'auto', border: 'none' }}
+                            style={{ padding: '4px 8px', minHeight: 'auto', border: 'none' }}
                             title="Card View"
                         >
                             <LayoutGrid size={14} />
                         </button>
                     </div>
-                    <button className="btn btn-ghost" onClick={fetchOrders}>
-                        <RefreshCw size={15} /> <span className="hide-mobile">Refresh</span>
+                    <button className="btn btn-ghost btn-sm" onClick={fetchOrders} style={{ flexShrink: 0, padding: '4px 8px' }}>
+                        <RefreshCw size={14} /> <span className="hide-mobile" style={{ fontSize: '11px' }}>Refresh</span>
                     </button>
                 </div>
             </div>
 
             <div className="page-container">
                 {/* Filters */}
-                <div className="card mb-20">
+                <div className="card mb-24">
                     <div className="card-body" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                        <div style={{ flex: 2, minWidth: 200 }}>
-                            <label className="form-label"><Search size={12} style={{ marginRight: 4 }} />Search</label>
+                        <div style={{ flex: '2 1 240px' }}>
+                            <label className="form-label"><Search size={14} style={{ marginRight: 6 }} />Search Customer</label>
                             <input
                                 className="form-input"
-                                placeholder="Customer name or phone..."
+                                placeholder="Enter name or phone..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && fetchOrders()}
                             />
                         </div>
-                        <div style={{ flex: 1, minWidth: 140 }}>
-                            <label className="form-label"><Filter size={12} style={{ marginRight: 4 }} />Status</label>
+                        <div style={{ flex: '1 1 150px' }}>
+                            <label className="form-label"><Filter size={14} style={{ marginRight: 6 }} />Status</label>
                             <select className="form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                                 {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
                             </select>
                         </div>
-                        <div style={{ flex: 1, minWidth: 160 }}>
+                        <div style={{ flex: '1 1 180px' }}>
                             <label className="form-label">Delivery Date</label>
                             <input
                                 className="form-input"
@@ -159,8 +198,10 @@ export default function OrderHistory({ onMenuClick }) {
                                 onChange={e => setDateFilter(e.target.value)}
                             />
                         </div>
-                        <button className="btn btn-primary" onClick={fetchOrders}>Apply</button>
-                        <button className="btn btn-ghost" onClick={() => { setSearch(''); setStatusFilter('All'); setDateFilter(''); }}>Clear</button>
+                        <div className="flex gap-8">
+                            <button className="btn btn-primary" onClick={fetchOrders}>Apply Filters</button>
+                            <button className="btn btn-ghost" onClick={() => { setSearch(''); setStatusFilter('All'); setDateFilter(''); }}>Reset</button>
+                        </div>
                     </div>
                 </div>
 
@@ -185,26 +226,25 @@ export default function OrderHistory({ onMenuClick }) {
                     ) : (
                         <div className="card-body" style={{ padding: 0 }}>
                             {viewMode === 'table' && (
-                                <div className="table-container" style={{ border: 'none', display: 'block' }}>
+                                <div className="table-container" style={{ border: 'none' }}>
                                     <table>
                                         <thead>
                                             <tr>
-                                                <th>#</th>
-                                                <th>Customer</th>
-                                                <th>Phone</th>
-                                                <th>Booking</th>
-                                                <th>Delivery</th>
+                                                <th>Order ID</th>
+                                                <th>Customer Name</th>
+                                                <th className="hide-tablet">Phone Number</th>
+                                                <th>Delivery Date</th>
                                                 <th>Total</th>
                                                 <th>Advance</th>
                                                 <th>Balance</th>
                                                 <th>Status</th>
-                                                <th>Bill</th>
+                                                <th>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {filtered.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={10} style={{ textAlign: 'center', padding: '32px', color: 'var(--gray)' }}>
+                                                    <td colSpan={9} style={{ textAlign: 'center', padding: '32px', color: 'var(--gray)' }}>
                                                         No orders found
                                                     </td>
                                                 </tr>
@@ -216,36 +256,35 @@ export default function OrderHistory({ onMenuClick }) {
                                                     </td>
                                                     <td>
                                                         <Link to={`/customer/${o.customer_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                                                            <strong>{o.customer_name}</strong>
+                                                            <div style={{ fontWeight: 600 }}>{o.customer_name}</div>
                                                         </Link>
                                                     </td>
-                                                    <td style={{ fontSize: 12 }}>{o.phone_number}</td>
-                                                    <td style={{ fontSize: 12 }}>{formatDate(o.booking_date)}</td>
-                                                    <td style={{ fontSize: 12, color: new Date(o.delivery_date) < new Date() && o.status !== 'Delivered' ? '#E65100' : 'inherit' }}>
+                                                    <td className="hide-tablet" style={{ fontSize: '13px' }}>{o.phone_number}</td>
+                                                    <td style={{ color: new Date(o.delivery_date) < new Date() && o.status !== 'Delivered' ? '#E65100' : 'inherit', fontWeight: 500 }}>
                                                         {formatDate(o.delivery_date)}
                                                     </td>
                                                      <td><strong>{`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}</strong></td>
-                                                     <td style={{ color: '#2E7D32', fontSize: 13 }}>
+                                                     <td>
                                                          {editingAdvanceId === o.order_id ? (
-                                                             <div className="flex gap-4">
+                                                             <div className="flex gap-2">
                                                                  <input
                                                                      type="number"
                                                                      className="form-input"
-                                                                     style={{ width: 80, padding: '2px 4px', fontSize: 12, height: 28 }}
+                                                                     style={{ width: 80, padding: '4px 8px', fontSize: '12px' }}
                                                                      value={tempAdvanceValue}
                                                                      onChange={e => setTempAdvanceValue(e.target.value)}
                                                                      onKeyDown={e => e.key === 'Enter' && handleAdvanceUpdate(o.order_id)}
                                                                      autoFocus
                                                                  />
                                                                  <button className="btn btn-sm btn-ghost p-0" onClick={() => handleAdvanceUpdate(o.order_id)}>
-                                                                     <Check size={14} color="#2E7D32" />
+                                                                     <Check size={16} color="#2E7D32" />
                                                                  </button>
                                                                  <button className="btn btn-sm btn-ghost p-0" onClick={() => setEditingAdvanceId(null)}>
-                                                                     <X size={14} color="#D32F2F" />
+                                                                     <X size={16} color="#D32F2F" />
                                                                  </button>
                                                              </div>
                                                          ) : (
-                                                             <div className="flex gap-4 items-center group">
+                                                             <div className="flex gap-2 items-center group">
                                                                  {`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}
                                                                  <button
                                                                      className="btn btn-sm btn-ghost p-0 opacity-0 group-hover:opacity-100"
@@ -256,13 +295,13 @@ export default function OrderHistory({ onMenuClick }) {
                                                              </div>
                                                          )}
                                                      </td>
-                                                    <td style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 600, fontSize: 13 }}>
+                                                    <td style={{ color: parseFloat(o.balance_amount) > 0 ? '#E65100' : '#2E7D32', fontWeight: 600 }}>
                                                         {`\u20b9${parseFloat(o.balance_amount).toLocaleString('en-IN')}`}
                                                     </td>
                                                     <td>
                                                         <select
                                                             className="form-select"
-                                                            style={{ padding: '4px 8px', fontSize: 12, width: 110 }}
+                                                            style={{ padding: '4px 8px', fontSize: '13px', width: '120px' }}
                                                             value={o.status}
                                                             disabled={updatingId === o.order_id}
                                                             onChange={e => handleStatusChange(o.order_id, e.target.value)}
@@ -275,12 +314,12 @@ export default function OrderHistory({ onMenuClick }) {
                                                     <td>
                                                         <div className="flex gap-8">
                                                             <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
-                                                                <Eye size={12} /> Bill
+                                                                <Eye size={14} /> Bill
                                                             </Link>
                                                             {o.status === 'Delivered' && (
                                                                 <button
-                                                                    className="btn btn-sm btn-outline"
-                                                                    style={{ borderColor: '#2E7D32', color: '#2E7D32', padding: '4px 8px' }}
+                                                                    className="btn btn-sm btn-maroon"
+                                                                    title="Send Request Review"
                                                                     onClick={(e) => { e.stopPropagation(); handleWhatsAppReview(o); }}
                                                                 >
                                                                     Review
@@ -296,7 +335,7 @@ export default function OrderHistory({ onMenuClick }) {
                             )}
 
                             {viewMode === 'cards' && (
-                                <div className="mobile-cards" style={{ padding: 16, display: 'flex' }}>
+                                <div className="mobile-cards" style={{ padding: 16 }}>
                                     {filtered.length === 0 && (
                                         <div className="empty-state">No orders found</div>
                                     )}
@@ -375,6 +414,9 @@ export default function OrderHistory({ onMenuClick }) {
                                                 </div>
                                             </div>
                                             <div className="order-card-actions">
+                                                <Link to={`/customer/${o.customer_id}`} className="btn btn-sm btn-outline">
+                                                    <User size={14} /> Measurements
+                                                </Link>
                                                 <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
                                                     <Eye size={12} /> Bill
                                                 </Link>

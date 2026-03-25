@@ -67,11 +67,12 @@ h3 {
   min-height: 100vh;
   background: var(--ivory);
   transition: all 0.3s ease;
+  position: relative;
 }
 
 .page-container {
-  padding: 28px 32px;
-  max-width: 1200px;
+  padding: 16px 20px;
+  max-width: 100%;
 }
 
 /* ── Sidebar ────────────────────────── */
@@ -1031,7 +1032,7 @@ tbody td {
 
 /* ── Responsive Order Cards ─────────── */
 .mobile-cards {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 16px;
 }
@@ -1091,6 +1092,7 @@ tbody td {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 768px) {

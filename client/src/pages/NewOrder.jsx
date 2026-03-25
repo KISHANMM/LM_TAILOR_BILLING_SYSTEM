@@ -8,18 +8,43 @@ import { saveOfflineOrder } from '../utils/offlineStore';
 
 const SERVICE_TYPES = ['Blouse', 'Dress', 'Lehenga', 'Chudi', 'Alteration', 'Pico', 'Fall', 'Gonda', 'Krosha Work', 'Other'];
 
-const MEASUREMENT_FIELDS = [
-    { key: 'm_length', label: 'Length' },
-    { key: 'shoulder', label: 'Shoulder' },
-    { key: 'chest', label: 'Chest' },
-    { key: 'waist', label: 'Waist' },
-    { key: 'dot', label: 'Dot' },
-    { key: 'back_neck', label: 'Back Neck' },
-    { key: 'front_neck', label: 'Front Neck' },
-    { key: 'sleeves_length', label: 'Sleeves Length' },
-    { key: 'armhole', label: 'Armhole' },
-    { key: 'chest_distance', label: 'Chest Distance' },
-    { key: 'sleeves_round', label: 'Sleeves Round' },
+const measurementLabels = {
+    BLOUSE: [
+        { key: 'm_length', label: 'Length' },
+        { key: 'shoulder', label: 'Shoulder' },
+        { key: 'chest', label: 'Chest' },
+        { key: 'waist', label: 'Waist' },
+        { key: 'dot', label: 'Dot' },
+        { key: 'back_neck', label: 'Back Neck' },
+        { key: 'front_neck', label: 'Front Neck' },
+        { key: 'sleeves_length', label: 'Sleeves Length' },
+        { key: 'armhole', label: 'Armhole' },
+        { key: 'chest_distance', label: 'Chest Distance' },
+        { key: 'sleeves_round', label: 'Sleeves Round' },
+    ],
+    CHUDHIDHAR: [
+        { key: 't_length', label: 'Length' },
+        { key: 't_shoulder', label: 'Shoulder' },
+        { key: 't_chest', label: 'Chest' },
+        { key: 't_waist', label: 'Waist' },
+        { key: 't_back_neck', label: 'Back Neck' },
+        { key: 't_front_neck', label: 'Front Neck' },
+        { key: 't_sleeves_length', label: 'Sleeves Length' },
+        { key: 't_sleeves_round', label: 'Round' },
+        { key: 't_half_body', label: 'Half Body' },
+        { key: 't_hip', label: 'HIP' },
+        { key: 'b_length', label: 'B-Length (BL)' },
+        { key: 'b_bottom_round', label: 'B-Round (BR)' },
+        { key: 'b_hip', label: 'B-Hip (HP)' },
+        { key: 'b_fly', label: 'B-Fly (FLY)' },
+        { key: 'b_thai', label: 'B-Thai' },
+        { key: 'b_knee', label: 'B-Knee' },
+    ]
+};
+
+const ALL_MEASUREMENT_KEYS = [
+    ...measurementLabels.BLOUSE.map(f => f.key),
+    ...measurementLabels.CHUDHIDHAR.map(f => f.key),
 ];
 
 const initialService = () => ({ service_type: 'Blouse', quantity: 1, price: '', custom_type: '' });
@@ -42,10 +67,13 @@ export default function NewOrder({ onMenuClick, auth }) {
 
     // Measurements
     const [measurementType, setMeasurementType] = useState('Body'); // 'Body' or 'Sample'
+    const [activeTab, setActiveTab] = useState('BLOUSE'); // 'BLOUSE', 'TOP', or 'BOTTOM'
     const [measurements, setMeasurements] = useState({
         m_length: '', shoulder: '', chest: '', waist: '', dot: '',
         back_neck: '', front_neck: '', sleeves_length: '', armhole: '',
         chest_distance: '', sleeves_round: '',
+        t_length: '', t_shoulder: '', t_chest: '', t_waist: '', t_back_neck: '', t_front_neck: '', t_sleeves_length: '', t_sleeves_round: '', t_half_body: '', t_hip: '',
+        b_length: '', b_bottom_round: '', b_hip: '', b_fly: '', b_thai: '', b_knee: '',
     });
 
     // Services
@@ -69,6 +97,7 @@ export default function NewOrder({ onMenuClick, auth }) {
     const cameraInputRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerRef = useRef(null);
+    const submittingRef = useRef(false); // sync guard against double-submit
 
     const [loading, setLoading] = useState(false);
     const [searchLoading, setSearchLoading] = useState(false);
@@ -99,7 +128,9 @@ export default function NewOrder({ onMenuClick, auth }) {
                 setCustomerFound(true);
                 // Prefill measurements
                 const m = {};
-                MEASUREMENT_FIELDS.forEach(f => { m[f.key] = found[f.key] !== null ? String(found[f.key] ?? '') : ''; });
+                ALL_MEASUREMENT_KEYS.forEach(k => { 
+                    m[k] = found[k] !== null && found[k] !== undefined ? String(found[k] ?? '') : ''; 
+                });
                 setMeasurements(m);
                 toast.success(`Customer found: ${found.name}`);
             } else {
@@ -241,15 +272,19 @@ export default function NewOrder({ onMenuClick, auth }) {
     // ── Submit ────────────────────────────────────────
     async function handleSubmit(e) {
         e.preventDefault();
-        if (!customer.name || !customer.phone_number) return toast.error('Customer name and phone are required');
-        if (!deliveryDate) return toast.error('Please set a delivery date');
-        if (services.some(s => !s.price || parseFloat(s.price) <= 0)) return toast.error('All services must have a price');
+        // Guard: block duplicate submissions from double-clicks
+        if (submittingRef.current) return;
+        submittingRef.current = true;
+        if (!customer.name || !customer.phone_number) { submittingRef.current = false; return toast.error('Customer name and phone are required'); }
+        if (!deliveryDate) { submittingRef.current = false; return toast.error('Please set a delivery date'); }
+        if (services.some(s => !s.price || parseFloat(s.price) <= 0)) { submittingRef.current = false; return toast.error('All services must have a price'); }
 
         // Requirement: Measurements mandatory for Blouse (IF using Body Measurements)
         const hasBlouse = services.some(s => s.service_type === 'Blouse');
         if (hasBlouse && measurementType === 'Body') {
-            const missing = MEASUREMENT_FIELDS.filter(f => !measurements[f.key] || measurements[f.key] === '');
+            const missing = measurementLabels.BLOUSE.filter(f => !measurements[f.key] || measurements[f.key] === '');
             if (missing.length > 0) {
+                submittingRef.current = false;
                 return toast.error(`Body Measurements are MANDATORY for Blouse! Missing: ${missing.map(m => m.label).join(', ')}`);
             }
         }
@@ -258,7 +293,7 @@ export default function NewOrder({ onMenuClick, auth }) {
         
         // Prepare data payloads
         const measPayload = {};
-        MEASUREMENT_FIELDS.forEach(f => { if (measurements[f.key]) measPayload[f.key] = parseFloat(measurements[f.key]); });
+        ALL_MEASUREMENT_KEYS.forEach(k => { if (measurements[k]) measPayload[k] = parseFloat(measurements[k]); });
 
         const svcList = services.map(s => ({
             service_type: s.service_type === 'Other' ? (s.custom_type || 'Other') : s.service_type,
@@ -297,6 +332,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                 toast.error('Failed to save offline order');
             } finally {
                 setLoading(false);
+                submittingRef.current = false;
             }
             return;
         }
@@ -327,6 +363,7 @@ export default function NewOrder({ onMenuClick, auth }) {
         } catch (err) {
             console.error('Order creation failed:', err);
             toast.error(err.response?.data?.error || 'Failed to create order');
+            submittingRef.current = false; // allow retry on error
         } finally {
             setLoading(false);
         }
@@ -467,13 +504,26 @@ export default function NewOrder({ onMenuClick, auth }) {
                             </div>
                         </div>
                         <div className="card-body">
+                            {/* Toggle between tabs */}
+                            <div className="flex gap-8 mb-20" style={{ borderBottom: '1px solid var(--gray-light)', paddingBottom: 12, overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                                {Object.keys(measurementLabels).map(tab => (
+                                    <button type="button" key={tab}
+                                        className={`btn btn-sm ${activeTab === tab ? 'btn-primary' : 'btn-outline'}`}
+                                        onClick={() => setActiveTab(tab)}
+                                        style={{ borderRadius: 8, minWidth: '100px' }}
+                                    >
+                                        {tab}
+                                    </button>
+                                ))}
+                            </div>
+
                             {measurementType === 'Sample' ? (
                                 <div className="alert alert-success mt-8" style={{ marginBottom: 0, textAlign: 'center' }}>
                                     ✅ Customer provided an existing fitting piece. Body measurements are not required.
                                 </div>
                             ) : (
                                 <div className="grid-3">
-                                    {MEASUREMENT_FIELDS.map(f => (
+                                    {(measurementLabels[activeTab] || []).map(f => (
                                         <div className="form-group" key={f.key}>
                                             <label className="form-label">{f.label}</label>
                                             <div className="input-prefix">
@@ -482,7 +532,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                                                     type="number"
                                                     step="any"
                                                     min="0"
-                                                    value={measurements[f.key]}
+                                                    value={measurements[f.key] || ''}
                                                     onChange={e => setMeasurements(m => ({ ...m, [f.key]: e.target.value }))}
                                                     placeholder="0"
                                                 />

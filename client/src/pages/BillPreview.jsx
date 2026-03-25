@@ -76,12 +76,8 @@ export default function BillPreview({ onMenuClick }) {
 
     function handleWhatsApp() {
         if (!order) return;
-
-        // Format phone number for WhatsApp URL (must contain digits only, starting with country code)
         let phoneForUrl = order.phone_number.replace(/\D/g, '');
-        if (phoneForUrl.length === 10) {
-            phoneForUrl = '91' + phoneForUrl; // Default to India country code if 10 digits
-        }
+        if (phoneForUrl.length === 10) phoneForUrl = '91' + phoneForUrl;
 
         const msg = encodeURIComponent(
             `*LM Ladies Tailor - Bill*\n\n` +
@@ -102,11 +98,8 @@ export default function BillPreview({ onMenuClick }) {
 
     function handleWhatsAppReview() {
         if (!order) return;
-
         let phoneForUrl = order.phone_number.replace(/\D/g, '');
-        if (phoneForUrl.length === 10) {
-            phoneForUrl = '91' + phoneForUrl;
-        }
+        if (phoneForUrl.length === 10) phoneForUrl = '91' + phoneForUrl;
 
         const msg = encodeURIComponent(
             `Dear ${order.customer_name},\n\n` +
@@ -120,11 +113,32 @@ export default function BillPreview({ onMenuClick }) {
         window.open(`https://wa.me/${phoneForUrl}?text=${msg}`, '_blank');
     }
 
+    const handleWhatsAppReady = (order) => {
+        let phoneForUrl = order.phone_number.replace(/\D/g, '');
+        if (phoneForUrl.length === 10) phoneForUrl = '91' + phoneForUrl;
+
+        const msg = encodeURIComponent(
+            `Dear ${order.customer_name},\n\n` +
+            `Your blouse is ready to collect!\n\n` +
+            `Order No: #${String(order.order_id).padStart(4, '0')}\n` +
+            `Balance Amount: ₹${order.balance_amount.toLocaleString('en-IN')}\n\n` +
+            `*( Reminder : Please Give us a Call Before Coming to Shop at +919916562127 )*\n\n` +
+            `Please visit us soon. – L.M. Ladies Tailor`
+        );
+        window.open(`https://wa.me/${phoneForUrl}?text=${msg}`, '_blank');
+    };
+
     async function handleStatusChange(newStatus) {
         setStatusUpdating(true);
         try {
             await api.put(`/orders/${orderId}/status`, { status: newStatus });
-            setOrder(o => ({ ...o, status: newStatus }));
+            setOrder(o => {
+                const updated = { ...o, status: newStatus };
+                if (newStatus === 'Ready') {
+                    handleWhatsAppReady(updated);
+                }
+                return updated;
+            });
             toast.success(`Status updated to ${newStatus}`);
         } catch {
             toast.error('Status update failed');
