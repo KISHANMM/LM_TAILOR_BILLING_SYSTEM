@@ -5,10 +5,11 @@ const { db } = require('../db');
 // GET /api/dashboard
 router.get('/', async (req, res) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        // Use IST (UTC+5:30) for date comparisons since delivery dates are stored in Indian local time
+        const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
+        const today = nowIST.toISOString().split('T')[0];
+        const tomorrowIST = new Date(nowIST.getTime() + (24 * 60 * 60 * 1000));
+        const tomorrowStr = tomorrowIST.toISOString().split('T')[0];
 
         const result = {};
 
@@ -51,7 +52,7 @@ router.get('/', async (req, res) => {
         // 4. Recent Orders
         const recentRs = await db.execute(`SELECT o.*, c.name as customer_name, c.phone_number FROM orders o
                                           JOIN customers c ON c.id = o.customer_id
-                                          ORDER BY o.created_at DESC LIMIT 10`);
+                                          ORDER BY o.created_at DESC LIMIT 6`);
         result.recentOrders = recentRs.rows;
 
         // 5. Totals
@@ -62,10 +63,13 @@ router.get('/', async (req, res) => {
         result.totalOrders = Number(ordersRs.rows[0].count) || 0;
 
         const overdueRs = await db.execute({
-            sql: `SELECT COUNT(*) as count FROM orders WHERE delivery_date < ? AND status != 'Delivered'`,
+            sql: `SELECT o.*, c.name as customer_name, c.phone_number FROM orders o
+                  JOIN customers c ON c.id = o.customer_id
+                  WHERE o.delivery_date < ? AND o.status != 'Delivered' ORDER BY o.delivery_date ASC`,
             args: [today]
         });
-        result.overdueCount = Number(overdueRs.rows[0].count) || 0;
+        result.overdueOrders = overdueRs.rows;
+        result.overdueCount = overdueRs.rows.length;
 
         res.json(result);
     } catch (err) {
