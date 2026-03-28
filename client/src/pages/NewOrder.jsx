@@ -317,7 +317,8 @@ export default function NewOrder({ onMenuClick, auth }) {
             try {
                 const audioData = audioBlob ? await blobToBase64(audioBlob) : null;
                 const offlineData = {
-                    customer: { name: customer.name, phone_number: customer.phone_number },
+                    customer_id: customerId,
+                    customer: !customerId ? { name: customer.name, phone_number: customer.phone_number } : undefined,
                     measPayload,
                     orderPayload,
                     images: images.length > 0 ? images : [],
@@ -325,9 +326,14 @@ export default function NewOrder({ onMenuClick, auth }) {
                     recordingTime: audioBlob ? recordingTime : null
                 };
 
-                await saveOfflineOrder(offlineData);
+                const insertId = await saveOfflineOrder(offlineData);
                 toast.success('Offline mode: Order saved locally! It will sync when internet is back.', { duration: 5000 });
-                navigate('/');
+                
+                if (auth?.role === 'Worker') {
+                    navigate('/');
+                } else {
+                    navigate(`/bill/offline-${insertId}`);
+                }
             } catch (err) {
                 toast.error('Failed to save offline order');
             } finally {

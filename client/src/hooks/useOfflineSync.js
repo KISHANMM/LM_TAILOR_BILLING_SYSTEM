@@ -20,6 +20,7 @@ export default function useOfflineSync() {
     // Initial check on mount
     if (navigator.onLine) {
       syncOfflineOrders();
+      syncCustomersForOffline();
     }
 
     return () => {
@@ -27,6 +28,19 @@ export default function useOfflineSync() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  async function syncCustomersForOffline() {
+    try {
+      const res = await api.get('/customers');
+      if (res.data && res.data.length > 0) {
+        import('../utils/offlineStore').then(({ saveAllCustomersToOffline }) => {
+          saveAllCustomersToOffline(res.data);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to sync customers for offline use:', err);
+    }
+  }
 
   async function syncOfflineOrders() {
     const orders = await getOfflineOrders();
@@ -48,24 +62,17 @@ export default function useOfflineSync() {
         });
         const cid = custRes.data.id;
 
-        // 2. Create order
-        const finalOrderPayload = { ...orderPayload, customer_id: cid };
+        // 2. Create order (sending images and audio locally, so the backend duplicate guard prevents duplicate uploads)
+        const finalOrderPayload = { 
+          ...orderPayload, 
+          customer_id: cid,
+          images: images && images.length > 0 ? images : undefined,
+          audio_data: audioData || undefined,
+          recordingTime: recordingTime || undefined
+        };
         const orderRes = await api.post('/orders', finalOrderPayload);
-        const createdOrderId = orderRes.data.order_id;
 
-        // 3. Upload images
-        if (images && images.length > 0) {
-          await api.post(`/orders/${createdOrderId}/images`, { images });
-        }
-
-        // 4. Voice note
-        if (audioData) {
-          await api.post(`/orders/${createdOrderId}/voice-notes`, {
-            audio_data: audioData,
-            duration: recordingTime
-          });
-        }
-
+        // Delete from local queue after successful sync
         await removeOfflineOrder(order.id);
         successCount++;
       } catch (err) {

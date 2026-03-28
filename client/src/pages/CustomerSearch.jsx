@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu, LayoutGrid, List } from 'lucide-react';
 import api from '../api/axios';
+import { searchOfflineCustomers, getOfflineCustomerById } from '../utils/offlineStore';
 
 const BLOUSE_LABELS = {
     m_length: 'Length', shoulder: 'Shoulder', chest: 'Chest', waist: 'Waist',
@@ -53,8 +54,16 @@ export default function CustomerSearch({ onMenuClick }) {
     async function handleSelectById(cid) {
         setLoading(true);
         try {
-            const res = await api.get(`/customers/${cid}`);
-            setSelected(res.data);
+            if (String(cid).startsWith('temp-')) {
+                const offlineCust = await getOfflineCustomerById(cid);
+                setSelected(offlineCust ? { ...offlineCust, orders: [], isOfflineQueue: true } : null);
+            } else {
+                const [apiRes, offlineCust] = await Promise.all([
+                    api.get(`/customers/${cid}`).catch(() => null),
+                    getOfflineCustomerById(cid).catch(() => null)
+                ]);
+                setSelected(apiRes?.data || offlineCust || null);
+            }
             setSearched(true);
         } catch {
             setSelected(null);
@@ -73,9 +82,20 @@ export default function CustomerSearch({ onMenuClick }) {
             setLoading(true);
             setSearched(true);
             try {
-                const param = /^\d+$/.test(q) ? `phone=${q}` : `name=${q}`;
-                const res = await api.get(`/customers/search?${param}`);
-                setResults(res.data || []);
+                const param = /^\\d+$/.test(q) ? `phone=${q}` : `name=${q}`;
+                const [apiRes, offlineRes] = await Promise.all([
+                    api.get(`/customers/search?${param}`).catch(() => ({ data: [] })),
+                    searchOfflineCustomers(q).catch(() => [])
+                ]);
+                const apiData = apiRes.data || [];
+                const livePhones = new Set(apiData.map(c => String(c.phone_number)));
+                const liveIds = new Set(apiData.map(c => String(c.id)));
+                
+                const uniqueOffline = (offlineRes || []).filter(c => 
+                    !liveIds.has(String(c.id)) && !livePhones.has(String(c.phone_number))
+                );
+                
+                setResults([...uniqueOffline, ...apiData]);
             } catch {
                 setResults([]);
             } finally {
@@ -101,9 +121,20 @@ export default function CustomerSearch({ onMenuClick }) {
         setSelected(null);
         setSearched(true);
         try {
-            const param = /^\d+$/.test(query) ? `phone=${query}` : `name=${query}`;
-            const res = await api.get(`/customers/search?${param}`);
-            setResults(res.data || []);
+            const param = /^\\d+$/.test(query) ? `phone=${query}` : `name=${query}`;
+            const [apiRes, offlineRes] = await Promise.all([
+                api.get(`/customers/search?${param}`).catch(() => ({ data: [] })),
+                searchOfflineCustomers(query).catch(() => [])
+            ]);
+            const apiData = apiRes.data || [];
+            const livePhones = new Set(apiData.map(c => String(c.phone_number)));
+            const liveIds = new Set(apiData.map(c => String(c.id)));
+            
+            const uniqueOffline = (offlineRes || []).filter(c => 
+                !liveIds.has(String(c.id)) && !livePhones.has(String(c.phone_number))
+            );
+            
+            setResults([...uniqueOffline, ...apiData]);
         } catch {
             setResults([]);
         } finally {
@@ -114,8 +145,16 @@ export default function CustomerSearch({ onMenuClick }) {
     async function handleSelect(customer) {
         setIsEditing(false); // Reset editing mode when selecting a new customer
         try {
-            const res = await api.get(`/customers/${customer.id}`);
-            setSelected(res.data);
+            if (String(customer.id).startsWith('temp-')) {
+                const offlineCust = await getOfflineCustomerById(customer.id);
+                setSelected(offlineCust ? { ...offlineCust, orders: [], isOfflineQueue: true } : customer);
+            } else {
+                const [apiRes, offlineCust] = await Promise.all([
+                    api.get(`/customers/${customer.id}`).catch(() => null),
+                    getOfflineCustomerById(customer.id).catch(() => null)
+                ]);
+                setSelected(apiRes?.data || offlineCust || customer);
+            }
         } catch {
             setSelected(customer);
         }
@@ -253,9 +292,15 @@ export default function CustomerSearch({ onMenuClick }) {
                                     <tbody>
                                         {results.map(c => (
                                             <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => handleSelect(c)}>
-                                                <td><strong><User size={13} style={{ marginRight: 6, color: 'var(--gold)' }} />{c.name}</strong></td>
+                                                <td>
+                                                    <strong>
+                                                        <User size={13} style={{ marginRight: 6, color: 'var(--gold)' }} />
+                                                        {c.name}
+                                                        {String(c.id).startsWith('temp-') && <span style={{ marginLeft: 8, color: '#E65100', fontSize: 11, fontWeight: 'normal' }}>(Offline)</span>}
+                                                    </strong>
+                                                </td>
                                                 <td><Phone size={12} style={{ marginRight: 4 }} />{c.phone_number}</td>
-                                                <td style={{ fontSize: 12 }}>{formatDate(c.created_at)}</td>
+                                                <td style={{ fontSize: 12 }}>{c.created_at ? formatDate(c.created_at) : 'Pending Sync'}</td>
                                                 <td>
                                                     <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); handleSelect(c); }}>
                                                         <Eye size={12} /> View Profile
@@ -281,15 +326,20 @@ export default function CustomerSearch({ onMenuClick }) {
                             {/* Info card */}
                             <div className="card">
                                 <div className="card-header">
-                                    <h3 className="card-title flex gap-8"><User size={18} color="var(--gold)" /> Customer Info</h3>
+                                    <h3 className="card-title flex gap-8">
+                                        <User size={18} color="var(--gold)" /> Customer Info
+                                        {selected.isOfflineQueue && <span style={{ color: '#E65100', fontSize: 12, marginLeft: 8 }}>(Pending Sync)</span>}
+                                    </h3>
                                     {!isEditingInfo ? (
                                         <div className="flex gap-8">
                                             <a href={`tel:${selected.phone_number}`} className="btn btn-sm btn-outline" style={{ color: '#2E7D32', borderColor: '#2E7D32' }} title="Call Customer">
                                                 <Phone size={13} /> Call
                                             </a>
+                                            {!selected.isOfflineQueue && (
                                             <button className="btn btn-sm btn-outline" onClick={handleStartEditInfo} title="Edit Info">
                                                 <Edit2 size={13} /> Edit
                                             </button>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="flex gap-8">
@@ -347,9 +397,11 @@ export default function CustomerSearch({ onMenuClick }) {
                                 <div className="card-header">
                                     <h3 className="card-title flex gap-8"><Ruler size={18} color="var(--gold)" /> Measurements</h3>
                                     {!isEditing ? (
+                                        !selected.isOfflineQueue && (
                                         <button className="btn btn-sm btn-outline" onClick={handleStartEdit} title="Edit Measurements">
                                             <Edit2 size={13} /> Edit
                                         </button>
+                                        )
                                     ) : (
                                         <div className="flex gap-8">
                                             <button className="btn btn-sm btn-ghost" onClick={handleCancelEdit} style={{ color: 'var(--maroon)' }}>

@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Download, Share2, Printer, ChevronLeft, CheckCircle, Clock, Menu, Image as ImageIcon, X, Mic } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
+import { getOfflineOrders } from '../utils/offlineStore';
 
 function StatusBadge({ status }) {
     const cls = { Pending: 'badge badge-pending', Ready: 'badge badge-ready', Delivered: 'badge badge-delivered' }[status] || 'badge';
@@ -25,9 +26,48 @@ export default function BillPreview({ onMenuClick }) {
     const [statusUpdating, setStatusUpdating] = useState(false);
 
     useEffect(() => {
+        if (orderId && orderId.toString().startsWith('offline-')) {
+            const queueId = parseInt(orderId.replace('offline-', ''), 10);
+            getOfflineOrders().then(orders => {
+                const queuedOrder = orders.find(o => o.id === queueId);
+                if (!queuedOrder) {
+                    toast.error('Offline order not found');
+                    setLoading(false);
+                    return;
+                }
+                
+                const p = queuedOrder.orderPayload;
+                const total = p.services.reduce((s, svc) => s + (parseFloat(svc.price) * parseInt(svc.quantity)), 0);
+                const pseudoOrder = {
+                    order_id: 'Offline Pending',
+                    customer_name: queuedOrder.customer?.name || 'Unknown',
+                    phone_number: queuedOrder.customer?.phone_number || '',
+                    booking_date: p.booking_date,
+                    delivery_date: p.delivery_date,
+                    total_amount: total,
+                    advance_paid: p.advance_paid,
+                    balance_amount: total - p.advance_paid,
+                    status: 'Pending',
+                    measurement_type: p.measurement_type,
+                    notes: p.notes,
+                    services: p.services,
+                    created_at: new Date(queuedOrder.timestamp || Date.now()).toISOString()
+                };
+
+                setOrder(pseudoOrder);
+                setImages(queuedOrder.images ? queuedOrder.images.map((img, i) => ({ id: `img-${i}`, image_data: img })) : []);
+                setVoiceNotes(queuedOrder.audioData ? [{ id: 'vn-1', audio_data: queuedOrder.audioData, duration: queuedOrder.recordingTime }] : []);
+                setLoading(false);
+            }).catch(() => {
+                toast.error('Failed to load offline order');
+                setLoading(false);
+            });
+            return;
+        }
+
         Promise.all([
             api.get(`/orders/${orderId}`),
-            api.get(`/orders/${orderId}/images`).catch(() => ({ data: [] })), // suppress error if images fail
+            api.get(`/orders/${orderId}/images`).catch(() => ({ data: [] })), 
             api.get(`/orders/${orderId}/voice-notes`).catch(() => ({ data: [] }))
         ])
             .then(([orderRes, imgRes, voiceRes]) => {
@@ -63,8 +103,9 @@ export default function BillPreview({ onMenuClick }) {
         const originalTitle = document.title;
 
         // Format the customer name for a clean filename (e.g. "Jane_Doe_Bill_0012")
-        const safeName = order.customer_name.replace(/[^a-zA-Z0-9]/g, '_');
-        document.title = `${safeName}_Bill_${String(order.order_id).padStart(4, '0')}`;
+        const safeName = (order.customer_name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
+        const oIdStr = order.order_id === 'Offline Pending' ? 'Offline' : String(order.order_id).padStart(4, '0');
+        document.title = `${safeName}_Bill_${oIdStr}`;
 
         window.print();
 
@@ -176,7 +217,7 @@ export default function BillPreview({ onMenuClick }) {
                         <ChevronLeft size={16} /> Back
                     </button>
                     <div>
-                        <div className="topbar-title">Bill #{String(order.order_id).padStart(4, '0')}</div>
+                        <div className="topbar-title">Bill {order.order_id === 'Offline Pending' ? '(Offline)' : `#${String(order.order_id).padStart(4, '0')}`}</div>
                         <div className="topbar-subtitle">{order.customer_name}</div>
                     </div>
                 </div>
@@ -225,9 +266,13 @@ export default function BillPreview({ onMenuClick }) {
 
                             {/* Bill Meta */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 20px', background: 'var(--blush)', borderBottom: '1px solid var(--gray-light)', fontSize: 12 }}>
-                                <span><strong>Bill #:</strong> {String(order.order_id).padStart(4, '0')}</span>
+                                <span><strong>Bill #:</strong> {order.order_id === 'Offline Pending' ? 'Pending Sync' : String(order.order_id).padStart(4, '0')}</span>
                                 <span><strong>Date:</strong> {new Date().toLocaleDateString('en-IN')}</span>
-                                <StatusBadge status={order.status} />
+                                {order.order_id === 'Offline Pending' ? (
+                                    <span className="badge" style={{ background: '#FFF3E0', color: '#E65100' }}>Pending Sync</span>
+                                ) : (
+                                    <StatusBadge status={order.status} />
+                                )}
                             </div>
 
                             {/* Customer Details */}

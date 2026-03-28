@@ -537,20 +537,22 @@ tbody td {
 
 /* ── Offline Banner ─────────────────── */
 .offline-banner {
-  background: #6a1e2e;
-  color: #c5a059;
-  padding: 8px 16px;
+  background: var(--maroon-dark, #6a1e2e);
+  color: var(--gold, #c5a059);
+  padding: 12px 16px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 12px;
   font-size: 0.9rem;
   font-weight: 500;
-  border-bottom: 2px solid #c5a059;
+  border: 1px solid var(--gold, #c5a059);
+  border-radius: 8px;
   z-index: 1100;
-  position: sticky;
-  top: 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 .offline-banner .sync-btn {

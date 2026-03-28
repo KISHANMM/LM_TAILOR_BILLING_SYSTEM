@@ -147,8 +147,9 @@ router.post('/', async (req, res) => {
 
         // ── Google Sheets backup (non-blocking) ──────────────────────────
         // Fetch measurements for the sheet (best-effort, don't block response)
-        setImmediate(async () => {
-            try {
+        if (!isLocal) {
+            setImmediate(async () => {
+                try {
                 const measRs = await db.execute({
                     sql: 'SELECT * FROM measurements WHERE customer_id = ?',
                     args: [cid]
@@ -192,6 +193,7 @@ router.post('/', async (req, res) => {
                 console.error('[Sheets] Background backup error:', sheetErr.message);
             }
         });
+        }
         // ────────────────────────────────────────────────────────────────
 
     } catch (err) {
@@ -462,6 +464,32 @@ router.delete('/voice-notes/:noteId', async (req, res) => {
             sql: 'DELETE FROM order_voice_notes WHERE id = ?',
             args: [req.params.noteId]
         });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/orders/:id
+router.delete('/:id', async (req, res) => {
+    try {
+        await db.execute({
+            sql: 'DELETE FROM services WHERE order_id = ?',
+            args: [req.params.id]
+        });
+        await db.execute({
+            sql: 'DELETE FROM order_images WHERE order_id = ?',
+            args: [req.params.id]
+        });
+        await db.execute({
+            sql: 'DELETE FROM order_voice_notes WHERE order_id = ?',
+            args: [req.params.id]
+        });
+        await db.execute({
+            sql: 'DELETE FROM orders WHERE order_id = ?',
+            args: [req.params.id]
+        });
+        
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

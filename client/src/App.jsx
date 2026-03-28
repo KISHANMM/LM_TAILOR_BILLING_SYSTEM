@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import { Toaster, toast } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
@@ -15,6 +15,34 @@ import './index.css';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import useOfflineSync from './hooks/useOfflineSync';
 import { WifiOff, RefreshCw } from 'lucide-react';
+
+function OfflineBannerWrapper({ isOnline, isSyncing, syncOfflineOrders }) {
+  const [show, setShow] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!isOnline) {
+      setShow(true);
+      const timer = setTimeout(() => setShow(false), 2000);
+      return () => clearTimeout(timer);
+    } else {
+      setShow(false);
+    }
+  }, [location.pathname, isOnline]);
+
+  if (!show || isOnline) return null;
+
+  return (
+    <div className="offline-banner">
+      <WifiOff size={16} />
+      <span>Offline</span>
+      <button onClick={syncOfflineOrders} disabled={isSyncing} className="sync-btn">
+        <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+        {isSyncing ? 'Syncing...' : 'Sync'}
+      </button>
+    </div>
+  );
+}
 
 export default function App() {
   const [sidebarOpen, useState_sidebarOpen] = useState(false);
@@ -48,16 +76,7 @@ export default function App() {
     <BrowserRouter>
       <Toaster position="top-center" />
       <div className={`app-layout ${sidebarOpen ? 'sidebar-open' : ''}`}>
-        {!isOnline && (
-          <div className="offline-banner">
-            <WifiOff size={16} />
-            <span>Working Offline - Orders saving locally</span>
-            <button onClick={syncOfflineOrders} disabled={isSyncing} className="sync-btn">
-              <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
-              {isSyncing ? 'Syncing...' : 'Sync Now'}
-            </button>
-          </div>
-        )}
+        <OfflineBannerWrapper isOnline={isOnline} isSyncing={isSyncing} syncOfflineOrders={syncOfflineOrders} />
         <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} auth={auth} setAuth={setAuth} />
 
         {/* Mobile Overlay */}

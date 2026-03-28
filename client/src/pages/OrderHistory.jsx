@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List, Edit2, Check, X, User } from 'lucide-react';
+import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List, Edit2, Check, X, User, Trash2 } from 'lucide-react';
 import api from '../api/axios';
+import { getOfflineOrders } from '../utils/offlineStore';
 
 function StatusBadge({ status }) {
     const cls = { Pending: 'badge badge-pending', Ready: 'badge badge-ready', Delivered: 'badge badge-delivered' }[status] || 'badge';
@@ -32,10 +33,51 @@ export default function OrderHistory({ onMenuClick }) {
         if (statusFilter !== 'All') params.set('status', statusFilter);
         if (dateFilter) params.set('date', dateFilter);
         if (search) params.set('search', search);
-        api.get(`/orders?${params}`)
-            .then(r => setOrders(r.data))
-            .catch(console.error)
-            .finally(() => setLoading(false));
+        
+        Promise.all([
+            api.get(`/orders?${params}`).catch(() => ({ data: [] })), 
+            getOfflineOrders().catch(() => [])
+        ]).then(([apiRes, offlineOrders]) => {
+            let combined = apiRes.data || [];
+
+            if (offlineOrders && offlineOrders.length > 0) {
+                let parsedOffline = offlineOrders.map(o => {
+                    const p = o.orderPayload;
+                    const total = p.services.reduce((s, svc) => s + (parseFloat(svc.price) * parseInt(svc.quantity)), 0);
+                    return {
+                        order_id: `offline-${o.id}`,
+                        customer_id: o.customer_id || `temp-${o.id}`,
+                        customer_name: o.customer?.name || 'Unknown',
+                        phone_number: o.customer?.phone_number || '',
+                        delivery_date: p.delivery_date,
+                        total_amount: total,
+                        advance_paid: p.advance_paid,
+                        balance_amount: total - parseFloat(p.advance_paid),
+                        status: 'Pending',
+                        isOfflineQueue: true
+                    };
+                });
+
+                // Apply filters locally to offline items since API missed them
+                if (search) {
+                    const s = search.toLowerCase();
+                    parsedOffline = parsedOffline.filter(o => 
+                        o.customer_name?.toLowerCase().includes(s) || 
+                        o.phone_number?.includes(s)
+                    );
+                }
+                if (statusFilter !== 'All') {
+                    parsedOffline = parsedOffline.filter(o => o.status === statusFilter);
+                }
+                if (dateFilter) {
+                    parsedOffline = parsedOffline.filter(o => o.delivery_date === dateFilter);
+                }
+
+                combined = [...parsedOffline, ...combined];
+            }
+            setOrders(combined);
+        })
+        .finally(() => setLoading(false));
     }
 
     useEffect(() => {
@@ -126,6 +168,28 @@ export default function OrderHistory({ onMenuClick }) {
         } catch (err) {
             console.error(err);
             alert('Failed to update advance');
+        } finally {
+            setUpdatingId(null);
+        }
+    }
+
+    async function handleDelete(orderId) {
+        if (!window.confirm("Are you sure you want to delete this order?")) return;
+        
+        const pwd = window.prompt("Enter the Password :");
+        if (pwd !== "LataMagaji") {
+            alert("Incorrect password. Deletion aborted.");
+            return;
+        }
+
+        setUpdatingId(orderId);
+        try {
+            await api.delete(`/orders/${orderId}`);
+            setOrders(prev => prev.filter(o => o.order_id !== orderId));
+            alert("Order deleted successfully.");
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete order.");
         } finally {
             setUpdatingId(null);
         }
@@ -288,7 +352,11 @@ export default function OrderHistory({ onMenuClick }) {
                                             {filtered.map(o => (
                                                 <tr key={o.order_id}>
                                                     <td>
-                                                        <span style={{ fontWeight: 700, color: 'var(--maroon)' }}>#{String(o.order_id).padStart(4, '0')}</span>
+                                                        {o.isOfflineQueue ? (
+                                                            <span style={{ fontWeight: 700, color: '#E65100', fontSize: 13 }} title="Pending Sync">Pending Sync</span>
+                                                        ) : (
+                                                            <span style={{ fontWeight: 700, color: 'var(--maroon)' }}>#{String(o.order_id).padStart(4, '0')}</span>
+                                                        )}
                                                     </td>
                                                     <td>
                                                         <Link to={`/customer/${o.customer_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
@@ -322,12 +390,14 @@ export default function OrderHistory({ onMenuClick }) {
                                                          ) : (
                                                              <div className="flex gap-2 items-center group">
                                                                  {`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}
+                                                                 {!o.isOfflineQueue && (
                                                                  <button
                                                                      className="btn btn-sm btn-ghost p-0 opacity-0 group-hover:opacity-100"
                                                                      onClick={() => { setEditingAdvanceId(o.order_id); setTempAdvanceValue(o.advance_paid); }}
                                                                  >
                                                                      <Edit2 size={12} />
                                                                  </button>
+                                                                 )}
                                                              </div>
                                                          )}
                                                      </td>
@@ -349,10 +419,13 @@ export default function OrderHistory({ onMenuClick }) {
                                                     </td>
                                                     <td>
                                                         <div className="flex gap-8">
+                                                            <Link to={`/customer/${o.customer_id}`} className="btn btn-sm btn-outline" title="Measurements">
+                                                                <User size={14} /> Meas.
+                                                            </Link>
                                                             <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
                                                                 <Eye size={14} /> Bill
                                                             </Link>
-                                                            {o.status === 'Delivered' && (
+                                                            {!o.isOfflineQueue && o.status === 'Delivered' && (
                                                                 <button
                                                                     className="btn btn-sm btn-maroon"
                                                                     title="Send Request Review"
@@ -360,6 +433,16 @@ export default function OrderHistory({ onMenuClick }) {
                                                                 >
                                                                     Review
                                                                 </button>
+                                                            )}
+                                                            {!o.isOfflineQueue && (
+                                                            <button 
+                                                                className="btn btn-sm btn-danger" 
+                                                                title="Delete Order"
+                                                                onClick={(e) => { e.stopPropagation(); handleDelete(o.order_id); }}
+                                                                disabled={updatingId === o.order_id}
+                                                            >
+                                                                <Trash2 size={14} /> Delete
+                                                            </button>
                                                             )}
                                                         </div>
                                                     </td>
@@ -428,12 +511,14 @@ export default function OrderHistory({ onMenuClick }) {
                                                          ) : (
                                                              <div className="flex-between w-full">
                                                                  {`\u20b9${parseFloat(o.advance_paid).toLocaleString('en-IN')}`}
+                                                                 {!o.isOfflineQueue && (
                                                                  <button
                                                                      className="btn btn-sm btn-ghost p-0"
                                                                      onClick={() => { setEditingAdvanceId(o.order_id); setTempAdvanceValue(o.advance_paid); }}
                                                                  >
                                                                      <Edit2 size={12} />
                                                                  </button>
+                                                                 )}
                                                              </div>
                                                          )}
                                                      </span>
@@ -456,7 +541,7 @@ export default function OrderHistory({ onMenuClick }) {
                                                 <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
                                                     <Eye size={12} /> Bill
                                                 </Link>
-                                                {o.status === 'Delivered' && (
+                                                {!o.isOfflineQueue && o.status === 'Delivered' && (
                                                     <button
                                                         className="btn btn-sm btn-outline"
                                                         style={{ borderColor: '#2E7D32', color: '#2E7D32' }}
@@ -464,6 +549,16 @@ export default function OrderHistory({ onMenuClick }) {
                                                     >
                                                         Review
                                                     </button>
+                                                )}
+                                                {!o.isOfflineQueue && (
+                                                <button
+                                                    className="btn btn-sm btn-danger"
+                                                    title="Delete Order"
+                                                    onClick={() => handleDelete(o.order_id)}
+                                                    disabled={updatingId === o.order_id}
+                                                >
+                                                    <Trash2 size={12} /> Delete
+                                                </button>
                                                 )}
                                             </div>
                                         </div>
