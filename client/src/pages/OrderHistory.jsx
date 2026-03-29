@@ -419,9 +419,6 @@ export default function OrderHistory({ onMenuClick }) {
                                                     </td>
                                                     <td>
                                                         <div className="flex gap-8">
-                                                            <Link to={`/customer/${o.customer_id}`} className="btn btn-sm btn-outline" title="Measurements">
-                                                                <User size={14} /> Meas.
-                                                            </Link>
                                                             <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
                                                                 <Eye size={14} /> Bill
                                                             </Link>
@@ -435,14 +432,14 @@ export default function OrderHistory({ onMenuClick }) {
                                                                 </button>
                                                             )}
                                                             {!o.isOfflineQueue && (
-                                                            <button 
-                                                                className="btn btn-sm btn-danger" 
-                                                                title="Delete Order"
-                                                                onClick={(e) => { e.stopPropagation(); handleDelete(o.order_id); }}
-                                                                disabled={updatingId === o.order_id}
-                                                            >
-                                                                <Trash2 size={14} /> Delete
-                                                            </button>
+                                                                <button 
+                                                                    className="btn btn-sm btn-danger" 
+                                                                    title="Delete Order"
+                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(o.order_id); }}
+                                                                    disabled={updatingId === o.order_id}
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
                                                             )}
                                                         </div>
                                                     </td>
@@ -557,7 +554,7 @@ export default function OrderHistory({ onMenuClick }) {
                                                     onClick={() => handleDelete(o.order_id)}
                                                     disabled={updatingId === o.order_id}
                                                 >
-                                                    <Trash2 size={12} /> Delete
+                                                    <Trash2 size={12} />
                                                 </button>
                                                 )}
                                             </div>
