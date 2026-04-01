@@ -217,7 +217,7 @@ router.get('/', async (req, res) => {
         if (search) { query += ' AND (c.name LIKE ? OR c.phone_number LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
         if (worker) { query += ' AND o.assigned_worker = ?'; params.push(worker); }
 
-        if (sort === 'delivery_date') {
+        if (status === 'Pending' || status === 'Ready') {
             query += ' ORDER BY o.delivery_date ASC';
         } else {
             query += ' ORDER BY o.created_at DESC';
