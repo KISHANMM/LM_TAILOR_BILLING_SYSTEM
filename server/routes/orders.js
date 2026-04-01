@@ -205,7 +205,7 @@ router.post('/', async (req, res) => {
 // GET /api/orders
 router.get('/', async (req, res) => {
     try {
-        const { status, date, search, worker } = req.query;
+        const { status, date, search, worker, sort } = req.query;
         let query = `SELECT o.*, c.name as customer_name, c.phone_number
         FROM orders o 
         JOIN customers c ON c.id = o.customer_id 
@@ -217,7 +217,11 @@ router.get('/', async (req, res) => {
         if (search) { query += ' AND (c.name LIKE ? OR c.phone_number LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
         if (worker) { query += ' AND o.assigned_worker = ?'; params.push(worker); }
 
-        query += ' ORDER BY o.created_at DESC';
+        if (sort === 'delivery_date') {
+            query += ' ORDER BY o.delivery_date ASC';
+        } else {
+            query += ' ORDER BY o.created_at DESC';
+        }
 
         const rs = await db.execute({ sql: query, args: params });
         res.json(rs.rows);

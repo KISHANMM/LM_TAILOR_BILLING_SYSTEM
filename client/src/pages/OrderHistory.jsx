@@ -14,7 +14,7 @@ function formatDate(d) {
     return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const STATUS_OPTIONS = ['All', 'Pending', 'Ready', 'Delivered'];
+const STATUS_OPTIONS = ['All', 'Pending', 'Ready', 'Delivered', 'Delivery Date'];
 
 export default function OrderHistory({ onMenuClick }) {
     const [orders, setOrders] = useState([]);
@@ -30,7 +30,8 @@ export default function OrderHistory({ onMenuClick }) {
     function fetchOrders() {
         setLoading(true);
         const params = new URLSearchParams();
-        if (statusFilter !== 'All') params.set('status', statusFilter);
+        if (statusFilter !== 'All' && statusFilter !== 'Delivery Date') params.set('status', statusFilter);
+        if (statusFilter === 'Delivery Date') params.set('sort', 'delivery_date');
         if (dateFilter) params.set('date', dateFilter);
         if (search) params.set('search', search);
         
@@ -66,7 +67,7 @@ export default function OrderHistory({ onMenuClick }) {
                         o.phone_number?.includes(s)
                     );
                 }
-                if (statusFilter !== 'All') {
+                if (statusFilter !== 'All' && statusFilter !== 'Delivery Date') {
                     parsedOffline = parsedOffline.filter(o => o.status === statusFilter);
                 }
                 if (dateFilter) {
@@ -74,6 +75,10 @@ export default function OrderHistory({ onMenuClick }) {
                 }
 
                 combined = [...parsedOffline, ...combined];
+            }
+
+            if (statusFilter === 'Delivery Date') {
+                combined.sort((a, b) => new Date(a.delivery_date) - new Date(b.delivery_date));
             }
             setOrders(combined);
         })
