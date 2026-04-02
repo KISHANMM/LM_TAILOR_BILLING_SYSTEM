@@ -60,44 +60,7 @@ router.delete('/expenses/:id', async (req, res) => {
 // Returns overview of Income vs Expense for Today, This Month, This Year, and All Time
 router.get('/summary', async (req, res) => {
     try {
-        const queries = {
-            total_income: "SELECT sum(total_amount) as val FROM orders",
-            today_income: "SELECT sum(total_amount) as val FROM orders WHERE substr(created_at, 1, 10) = date('now', 'localtime')",
-            monthly_income: "SELECT sum(total_amount) as val FROM orders WHERE substr(created_at, 1, 7) = substr(date('now', 'localtime'), 1, 7)",
-            yearly_income: "SELECT sum(total_amount) as val FROM orders WHERE substr(created_at, 1, 4) = substr(date('now', 'localtime'), 1, 4)",
-
-            total_stitching: "SELECT sum(stitching_expense) as val FROM orders",
-            today_stitching: "SELECT sum(stitching_expense) as val FROM orders WHERE substr(created_at, 1, 10) = date('now', 'localtime')",
-            monthly_stitching: "SELECT sum(stitching_expense) as val FROM orders WHERE substr(created_at, 1, 7) = substr(date('now', 'localtime'), 1, 7)",
-            yearly_stitching: "SELECT sum(stitching_expense) as val FROM orders WHERE substr(created_at, 1, 4) = substr(date('now', 'localtime'), 1, 4)",
-
-            total_expense: "SELECT sum(amount) as val FROM expenses",
-            today_expense: "SELECT sum(amount) as val FROM expenses WHERE date = date('now', 'localtime')",
-            monthly_expense: "SELECT sum(amount) as val FROM expenses WHERE substr(date, 1, 7) = substr(date('now', 'localtime'), 1, 7)",
-            yearly_expense: "SELECT sum(amount) as val FROM expenses WHERE substr(date, 1, 4) = substr(date('now', 'localtime'), 1, 4)",
-        };
-
-        const queryEntries = Object.entries(queries);
-        const batchQueries = queryEntries.map(([_, sql]) => sql);
-        
-        const rsBatch = await db.batch(batchQueries, "read");
-        
-        const results = {};
-        queryEntries.forEach(([key, _], index) => {
-            results[key] = rsBatch[index].rows[0]?.val || 0;
-        });
-
-        results.today_expense = (results.today_expense || 0) + (results.today_stitching || 0);
-        results.monthly_expense = (results.monthly_expense || 0) + (results.monthly_stitching || 0);
-        results.yearly_expense = (results.yearly_expense || 0) + (results.yearly_stitching || 0);
-        results.total_expense = (results.total_expense || 0) + (results.total_stitching || 0);
-
-        results.today_profit = (results.today_income || 0) - results.today_expense;
-        results.monthly_profit = (results.monthly_income || 0) - results.monthly_expense;
-        results.yearly_profit = (results.yearly_income || 0) - results.yearly_expense;
-        results.total_profit = (results.total_income || 0) - results.total_expense;
-        results.net_profit = results.total_profit; // for backwards compatibility if needed
-
+        const results = await getSummaryData();
         res.json(results);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -108,34 +71,58 @@ router.get('/summary', async (req, res) => {
 // Combines summary, expenses, services, and customers for faster loading
 router.get('/dashboard', async (req, res) => {
     try {
-        const [summary, expenses, services, customers] = await Promise.all([
+        const [summary, expenses, services, customers, monthlyRecords] = await Promise.all([
             getSummaryData(),
             getExpensesData(),
             getTopServicesData(),
-            getTopCustomersData()
+            getTopCustomersData(),
+            getMonthlyRecordsData()
         ]);
-        res.json({ summary, expenses, services, customers });
+        res.json({ summary, expenses, services, customers, monthlyRecords });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
+async function getMonthlyRecordsData() {
+    const query = `
+        SELECT month, SUM(income) as total_income, SUM(expense) as total_expense 
+        FROM (
+            SELECT substr(booking_date, 1, 7) as month, total_amount as income, 0 as expense FROM orders
+            UNION ALL
+            SELECT substr(date, 1, 7) as month, 0 as income, amount as expense FROM expenses
+            UNION ALL
+            SELECT substr(booking_date, 1, 7) as month, 0 as income, stitching_expense as expense FROM orders WHERE stitching_expense > 0
+        ) 
+        GROUP BY month 
+        ORDER BY month DESC
+        LIMIT 12
+    `;
+    const rs = await db.execute(query);
+    return rs.rows.map(r => ({
+        month: r.month,
+        total: r.total_income || 0,
+        expense: r.total_expense || 0,
+        profit: (r.total_income || 0) - (r.total_expense || 0)
+    }));
+}
+
 async function getSummaryData() {
     const queries = {
         total_income: "SELECT sum(total_amount) as val FROM orders",
-        today_income: "SELECT sum(total_amount) as val FROM orders WHERE created_at >= date('now', 'localtime', 'start of day')",
-        monthly_income: "SELECT sum(total_amount) as val FROM orders WHERE created_at >= date('now', 'localtime', 'start of month')",
-        yearly_income: "SELECT sum(total_amount) as val FROM orders WHERE created_at >= date('now', 'localtime', 'start of year')",
+        today_income: "SELECT sum(total_amount) as val FROM orders WHERE booking_date = date('now', 'localtime')",
+        monthly_income: "SELECT sum(total_amount) as val FROM orders WHERE substr(booking_date, 1, 7) = substr(date('now', 'localtime'), 1, 7)",
+        yearly_income: "SELECT sum(total_amount) as val FROM orders WHERE substr(booking_date, 1, 4) = substr(date('now', 'localtime'), 1, 4)",
 
         total_stitching: "SELECT sum(stitching_expense) as val FROM orders",
-        today_stitching: "SELECT sum(stitching_expense) as val FROM orders WHERE created_at >= date('now', 'localtime', 'start of day')",
-        monthly_stitching: "SELECT sum(stitching_expense) as val FROM orders WHERE created_at >= date('now', 'localtime', 'start of month')",
-        yearly_stitching: "SELECT sum(stitching_expense) as val FROM orders WHERE created_at >= date('now', 'localtime', 'start of year')",
+        today_stitching: "SELECT sum(stitching_expense) as val FROM orders WHERE booking_date = date('now', 'localtime')",
+        monthly_stitching: "SELECT sum(stitching_expense) as val FROM orders WHERE substr(booking_date, 1, 7) = substr(date('now', 'localtime'), 1, 7)",
+        yearly_stitching: "SELECT sum(stitching_expense) as val FROM orders WHERE substr(booking_date, 1, 4) = substr(date('now', 'localtime'), 1, 4)",
 
         total_expense: "SELECT sum(amount) as val FROM expenses",
-        today_expense: "SELECT sum(amount) as val FROM expenses WHERE date >= date('now', 'localtime', 'start of day')",
-        monthly_expense: "SELECT sum(amount) as val FROM expenses WHERE date >= date('now', 'localtime', 'start of month')",
-        yearly_expense: "SELECT sum(amount) as val FROM expenses WHERE date >= date('now', 'localtime', 'start of year')",
+        today_expense: "SELECT sum(amount) as val FROM expenses WHERE date = date('now', 'localtime')",
+        monthly_expense: "SELECT sum(amount) as val FROM expenses WHERE substr(date, 1, 7) = substr(date('now', 'localtime'), 1, 7)",
+        yearly_expense: "SELECT sum(amount) as val FROM expenses WHERE substr(date, 1, 4) = substr(date('now', 'localtime'), 1, 4)",
     };
 
     const queryEntries = Object.entries(queries);
@@ -163,14 +150,15 @@ async function getExpensesData(start_date, end_date) {
     if (start_date) { q += ' AND date >= ?'; args.push(start_date); }
     if (end_date) { q += ' AND date <= ?'; args.push(end_date); }
 
-    let sq = `SELECT order_id as id, substr(created_at, 1, 10) as date, assigned_worker as category, stitching_expense as amount, 'Order #' || order_id as description, 'stitching' as type FROM orders WHERE stitching_expense > 0`;
+    let sq = `SELECT order_id as id, booking_date as date, assigned_worker as category, stitching_expense as amount, 'Order #' || order_id as description, 'stitching' as type FROM orders WHERE stitching_expense > 0`;
     let sargs = [];
-    if (start_date) { sq += ' AND created_at >= ?'; sargs.push(start_date); }
-    if (end_date) { sq += ' AND created_at <= ?'; sargs.push(end_date + ' 23:59:59'); }
+    if (start_date) { sq += ' AND booking_date >= ?'; sargs.push(start_date); }
+    if (end_date) { sq += ' AND booking_date <= ?'; sargs.push(end_date); }
 
-    const rs = await db.execute({ sql: `SELECT * FROM (${q} UNION ALL ${sq}) ORDER BY date DESC LIMIT 100`, args: [...args, ...sargs] });
+    const rs = await db.execute({ sql: `SELECT * FROM (${q} UNION ALL ${sq}) ORDER BY date DESC LIMIT 50`, args: [...args, ...sargs] });
     return rs.rows;
 }
+
 
 async function getTopServicesData() {
     const rs = await db.execute(`SELECT service_type, COUNT(*) as count, SUM(price * quantity) as revenue FROM services GROUP BY service_type ORDER BY revenue DESC LIMIT 5`);
@@ -181,11 +169,6 @@ async function getTopCustomersData() {
     const rs = await db.execute(`SELECT c.id, c.name, c.phone_number, COUNT(o.order_id) as order_count, SUM(o.total_amount) as total_spent FROM customers c JOIN orders o ON c.id = o.customer_id GROUP BY c.id ORDER BY total_spent DESC LIMIT 5`);
     return rs.rows;
 }
-
-// Keep individual endpoints for specific interactions if needed
-router.get('/summary', async (req, res) => {
-    try { res.json(await getSummaryData()); } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
 router.get('/top-services', async (req, res) => {
     try { res.json(await getTopServicesData()); } catch (err) { res.status(500).json({ error: err.message }); }

@@ -15,6 +15,7 @@ export default function Analytics({ onMenuClick }) {
     const [expenses, setExpenses] = useState([]);
     const [topServices, setTopServices] = useState([]);
     const [topCustomers, setTopCustomers] = useState([]);
+    const [monthlyRecords, setMonthlyRecords] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const [expandedSections, setExpandedSections] = useState({
@@ -40,11 +41,12 @@ export default function Analytics({ onMenuClick }) {
         setLoading(true);
         api.get('/analytics/dashboard')
             .then(res => {
-                const { summary, expenses, services, customers } = res.data;
+                const { summary, expenses, services, customers, monthlyRecords } = res.data;
                 setSummary(summary);
                 setExpenses(expenses);
                 setTopServices(services);
                 setTopCustomers(customers);
+                setMonthlyRecords(monthlyRecords || []);
             }).catch(err => {
                 toast.error('Failed to load analytics');
                 console.error(err);
@@ -280,42 +282,54 @@ export default function Analytics({ onMenuClick }) {
                         </div>
                     </div>
 
-                    {/* Expense History List */}
+                    {/* Monthly Records Table */}
                     <div className="card">
-                        <div className="card-header"><h3 className="card-title">Recent Expenses</h3></div>
+                        <div className="card-header"><h3 className="card-title">Monthly Records</h3></div>
                         <div className="card-body" style={{ padding: 0 }}>
                             {loading ? <div className="spinner" style={{ margin: 20 }} /> : (
                                 <div className="table-container" style={{ border: 'none', maxHeight: 400, overflowY: 'auto' }}>
                                     <table>
                                         <thead>
                                             <tr>
-                                                <th>Date</th>
-                                                <th>Category</th>
-                                                <th>Amount</th>
-                                                <th></th>
+                                                <th>Month</th>
+                                                <th>Total</th>
+                                                <th>Expense</th>
+                                                <th>Profit</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {expenses.length === 0 ? (
-                                                <tr><td colSpan="4" style={{ textAlign: 'center', padding: 20 }}>No expenses recorded</td></tr>
-                                            ) : expenses.map(e => (
-                                                <tr key={e.type === 'stitching' ? `s_${e.id}` : `e_${e.id}`}>
-                                                    <td style={{ fontSize: 13 }}>{new Date(e.date).toLocaleDateString('en-IN')}</td>
-                                                    <td>
-                                                        <div style={{ fontWeight: 600 }}>{e.category || 'Expense'}</div>
-                                                        <div style={{ fontSize: 11, color: 'var(--gray)' }}>{e.description}</div>
-                                                    </td>
-                                                    <td style={{ color: '#d32f2f', fontWeight: 600 }}>₹{parseFloat(e.amount).toLocaleString('en-IN')}</td>
-                                                    <td style={{ textAlign: 'right' }}>
-                                                        {e.type !== 'stitching' && (
-                                                            <button type="button" className="btn btn-ghost" style={{ color: 'var(--gray)' }}
-                                                                onClick={() => handleDelete(e.id)}>
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            {monthlyRecords.length === 0 ? (
+                                                <tr><td colSpan="4" style={{ textAlign: 'center', padding: 20 }}>No records found</td></tr>
+                                            ) : (
+                                                (() => {
+                                                    let currentYear = null;
+                                                    return monthlyRecords.map((m, idx) => {
+                                                        const date = new Date(m.month + '-01');
+                                                        const year = date.getFullYear();
+                                                        const monthName = date.toLocaleDateString('en-IN', { month: 'long' }).toUpperCase();
+                                                        const showYearHeader = year !== currentYear;
+                                                        if (showYearHeader) currentYear = year;
+
+                                                        return (
+                                                            <React.Fragment key={m.month}>
+                                                                {showYearHeader && (
+                                                                    <tr style={{ background: 'var(--ivory)', fontWeight: 800, fontSize: 14 }}>
+                                                                        <td colSpan="4" style={{ padding: '8px 12px', borderBottom: '1px solid var(--gray-light)' }}>{year}</td>
+                                                                    </tr>
+                                                                )}
+                                                                <tr>
+                                                                    <td style={{ fontWeight: 600, paddingLeft: 20 }}>{monthName}</td>
+                                                                    <td style={{ color: '#2e7d32', fontWeight: 600 }}>₹{m.total.toLocaleString('en-IN')}</td>
+                                                                    <td style={{ color: '#d32f2f', fontWeight: 600 }}>₹{m.expense.toLocaleString('en-IN')}</td>
+                                                                    <td style={{ color: m.profit >= 0 ? '#2e7d32' : '#d32f2f', fontWeight: 700 }}>
+                                                                        ₹{m.profit.toLocaleString('en-IN')}
+                                                                    </td>
+                                                                </tr>
+                                                            </React.Fragment>
+                                                        );
+                                                    });
+                                                })()
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>

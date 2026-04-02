@@ -29,7 +29,7 @@ async function initDB() {
       `CREATE TABLE IF NOT EXISTS measurements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER NOT NULL,
-        length REAL,
+        meas_length REAL,
         shoulder REAL,
         chest REAL,
         waist REAL,
@@ -101,6 +101,12 @@ async function initDB() {
     ], "write");
     console.log('✅ Batch execution successful');
 
+    // Rename/Add length column properly
+    try {
+      await db.execute('ALTER TABLE measurements ADD COLUMN meas_length REAL');
+      console.log('✅ Added meas_length column to measurements table');
+    } catch (e) { }
+
     // Add measurement_type to existing orders table if it doesn't exist
     try {
       await db.execute('ALTER TABLE orders ADD COLUMN measurement_type TEXT NOT NULL DEFAULT "Body"');
@@ -114,8 +120,8 @@ async function initDB() {
 
     // Add basic measurement fields if they don't exist
     try {
-      await db.execute('ALTER TABLE measurements ADD COLUMN length REAL');
-      console.log('✅ Added length column to measurements table');
+      await db.execute('ALTER TABLE measurements ADD COLUMN meas_length REAL');
+      console.log('✅ Added meas_length column to measurements table');
     } catch (e) { }
 
     try {
