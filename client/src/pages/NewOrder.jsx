@@ -53,22 +53,29 @@ export default function NewOrder({ onMenuClick, auth }) {
     const navigate = useNavigate();
     const phoneRef = useRef();
 
+    const [initialDraft] = useState(() => {
+        try {
+            const d = localStorage.getItem('newOrderDraft');
+            return d ? JSON.parse(d) : null;
+        } catch { return null; }
+    });
+
     const today = new Date().toISOString().split('T')[0];
 
     // Customer
-    const [customer, setCustomer] = useState({ name: '', phone_number: '', notes: '' });
-    const [customerId, setCustomerId] = useState(null);
-    const [customerFound, setCustomerFound] = useState(false);
+    const [customer, setCustomer] = useState(initialDraft?.customer || { name: '', phone_number: '', notes: '' });
+    const [customerId, setCustomerId] = useState(initialDraft?.customerId ?? null);
+    const [customerFound, setCustomerFound] = useState(initialDraft?.customerFound ?? false);
 
     // Dates & Assignment
-    const [bookingDate, setBookingDate] = useState(today);
-    const [deliveryDate, setDeliveryDate] = useState('');
-    const [assignedWorker, setAssignedWorker] = useState('Praveen');
+    const [bookingDate, setBookingDate] = useState(initialDraft?.bookingDate || today);
+    const [deliveryDate, setDeliveryDate] = useState(initialDraft?.deliveryDate || '');
+    const [assignedWorker, setAssignedWorker] = useState(initialDraft?.assignedWorker || 'Praveen');
 
     // Measurements
-    const [measurementType, setMeasurementType] = useState('Body'); // 'Body' or 'Sample'
-    const [activeTab, setActiveTab] = useState('BLOUSE'); // 'BLOUSE', 'TOP', or 'BOTTOM'
-    const [measurements, setMeasurements] = useState({
+    const [measurementType, setMeasurementType] = useState(initialDraft?.measurementType || 'Body'); // 'Body' or 'Sample'
+    const [activeTab, setActiveTab] = useState(initialDraft?.activeTab || 'BLOUSE'); // 'BLOUSE', 'TOP', or 'BOTTOM'
+    const [measurements, setMeasurements] = useState(initialDraft?.measurements || {
         m_length: '', shoulder: '', chest: '', waist: '', dot: '',
         back_neck: '', front_neck: '', sleeves_length: '', armhole: '',
         chest_distance: '', sleeves_round: '',
@@ -77,14 +84,14 @@ export default function NewOrder({ onMenuClick, auth }) {
     });
 
     // Services
-    const [services, setServices] = useState([initialService()]);
+    const [services, setServices] = useState(initialDraft?.services || [initialService()]);
 
     // Images
-    const [images, setImages] = useState([]);
+    const [images, setImages] = useState(initialDraft?.images || []);
 
     // Payment
-    const [advancePaid, setAdvancePaid] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState('Cash'); // 'Cash' or 'PhonePe'
+    const [advancePaid, setAdvancePaid] = useState(initialDraft?.advancePaid || '');
+    const [paymentMethod, setPaymentMethod] = useState(initialDraft?.paymentMethod || 'Cash'); // 'Cash' or 'PhonePe'
 
     // Voice Note
     const [isRecording, setIsRecording] = useState(false);
@@ -101,6 +108,17 @@ export default function NewOrder({ onMenuClick, auth }) {
 
     const [loading, setLoading] = useState(false);
     const [searchLoading, setSearchLoading] = useState(false);
+
+    // ── Image Viewer State ────────────────────────────
+    const [selectedImage, setSelectedImage] = useState(null);
+
+    // ── Draft Persistence ─────────────────────────────
+    useEffect(() => {
+        const draft = {
+            customer, customerId, customerFound, bookingDate, deliveryDate, assignedWorker, measurementType, activeTab, measurements, services, images, advancePaid, paymentMethod
+        };
+        localStorage.setItem('newOrderDraft', JSON.stringify(draft));
+    }, [customer, customerId, customerFound, bookingDate, deliveryDate, assignedWorker, measurementType, activeTab, measurements, services, images, advancePaid, paymentMethod]);
 
     // ── Computed totals ───────────────────────────────
     const totalAmount = services.reduce((s, svc) => {
@@ -328,6 +346,7 @@ export default function NewOrder({ onMenuClick, auth }) {
 
                 const insertId = await saveOfflineOrder(offlineData);
                 toast.success('Offline mode: Order saved locally! It will sync when internet is back.', { duration: 5000 });
+                localStorage.removeItem('newOrderDraft');
                 
                 if (auth?.role === 'Worker') {
                     navigate('/');
@@ -361,6 +380,7 @@ export default function NewOrder({ onMenuClick, auth }) {
             const createdOrderId = orderRes.data.order_id;
 
             toast.success('Order created successfully!');
+            localStorage.removeItem('newOrderDraft');
             if (auth?.role === 'Worker') {
                 navigate('/');
             } else {
@@ -693,7 +713,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                                     {images.map((src, i) => (
                                         <div key={i} style={{ position: 'relative', width: 100, height: 100, border: '1px solid var(--gray-light)', borderRadius: 8, overflow: 'hidden' }}>
-                                            <img src={src} alt="Design preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            <img src={src} alt="Design preview" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} onClick={() => setSelectedImage(src)} />
                                             <button
                                                 type="button"
                                                 onClick={() => removeImage(i)}
@@ -768,7 +788,7 @@ export default function NewOrder({ onMenuClick, auth }) {
 
                     {/* Submit */}
                     <div className="flex gap-12" style={{ justifyContent: 'flex-end' }}>
-                        <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>Cancel</button>
+                        <button type="button" className="btn btn-ghost" onClick={() => { localStorage.removeItem('newOrderDraft'); navigate('/'); }}>Cancel</button>
                         <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
                             {loading ? 'Creating…' : '✓ Create Order & View Bill'}
                         </button>
@@ -782,6 +802,16 @@ export default function NewOrder({ onMenuClick, auth }) {
                     onSave={handleScratchSave} 
                     onClose={() => setShowScratchPad(false)} 
                 />
+            )}
+
+            {/* Fullscreen Image Modal */}
+            {selectedImage && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={() => setSelectedImage(null)}>
+                    <img src={selectedImage} style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain', borderRadius: '8px' }} onClick={(e) => e.stopPropagation()} />
+                    <button style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', cursor: 'pointer', borderRadius: '50%', padding: '8px', display: 'flex' }} onClick={() => setSelectedImage(null)}>
+                        <X size={24} />
+                    </button>
+                </div>
             )}
 
             <style>{`
