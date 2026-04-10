@@ -484,6 +484,9 @@ export default function BillPreview({ onMenuClick }) {
                                 <Link to="/" className="btn btn-ghost" style={{ justifyContent: 'center' }}>Dashboard</Link>
                                 <Link to="/new-order" className="btn btn-outline" style={{ justifyContent: 'center' }}>New Order</Link>
                                 <Link to="/orders" className="btn btn-ghost" style={{ justifyContent: 'center' }}>All Orders</Link>
+                                {order.customer_id && (
+                                    <Link to={`/customer/${order.customer_id}`} className="btn btn-outline" style={{ justifyContent: 'center' }}>📏 Measurements</Link>
+                                )}
                             </div>
                         </div>
                     </div>
