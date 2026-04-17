@@ -15,4 +15,10 @@ As requested by the user, these following features should be implemented in the 
    - Customer retention and loyalty tracking (identifying top customers).
    - Export data functionality (e.g., PDF or Excel files of monthly income/expenses).
 
+4. **Mobile Responsiveness Improvements**:
+   - Adjust Sidebar width on small screens to prevent covering too much area.
+   - Refine Table layouts on mobile by hiding non-essential columns (e.g., Phone, Booking Date).
+   - Fix Notification Toast positioning to prevent overlap with UI elements.
+   - Improve overall touch targets and spacing for smaller screens.
+
 *(Note: Digital Catalog & Inspiration Gallery is already implemented in the 'exquisite tailoring app' catalog).*

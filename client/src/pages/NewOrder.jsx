@@ -300,10 +300,18 @@ export default function NewOrder({ onMenuClick, auth }) {
         // Requirement: Measurements mandatory for Blouse (IF using Body Measurements)
         const hasBlouse = services.some(s => s.service_type === 'Blouse');
         if (hasBlouse && measurementType === 'Body') {
-            const missing = measurementLabels.BLOUSE.filter(f => !measurements[f.key] || measurements[f.key] === '');
-            if (missing.length > 0) {
+            const missing = measurementLabels.BLOUSE.find(f => !measurements[f.key] || measurements[f.key] === '');
+            if (missing) {
                 submittingRef.current = false;
-                return toast.error(`Body Measurements are MANDATORY for Blouse! Missing: ${missing.map(m => m.label).join(', ')}`);
+                setActiveTab('BLOUSE');
+                setTimeout(() => {
+                    const el = document.getElementById(`meas_input_${missing.key}`);
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+                return toast.error(`Enter ${missing.label}`);
             }
         }
 
@@ -397,6 +405,56 @@ export default function NewOrder({ onMenuClick, auth }) {
 
     return (
         <div>
+            {/* ── Full-screen loading overlay when creating order ── */}
+            {loading && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 9999,
+                    background: 'rgba(20, 5, 9, 0.95)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 20,
+                }}>
+                    {/* Spinning ring */}
+                    <div style={{
+                        width: 64, height: 64,
+                        border: '4px solid rgba(198,167,94,0.2)',
+                        borderTop: '4px solid var(--gold)',
+                        borderRight: '4px solid rgba(198,167,94,0.5)',
+                        borderRadius: '50%',
+                        animation: 'spin 0.75s linear infinite',
+                    }} />
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+                            Creating Order...
+                        </div>
+                        <div style={{ fontSize: 13, color: 'rgba(198,167,94,0.7)', letterSpacing: '0.02em' }}>
+                            Saving customer &amp; measurements · Please wait
+                        </div>
+                    </div>
+                    {/* Pulsing dots */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        {[0, 1, 2].map(i => (
+                            <div key={i} style={{
+                                width: 8, height: 8,
+                                borderRadius: '50%',
+                                background: 'var(--gold)',
+                                animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+                                opacity: 0.7,
+                            }} />
+                        ))}
+                    </div>
+                    <style>{`
+                        @keyframes pulse {
+                            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+                            40% { transform: scale(1); opacity: 1; }
+                        }
+                    `}</style>
+                </div>
+            )}
             {/* Top bar */}
             <div className="topbar flex-between">
                 <div className="flex">
@@ -414,7 +472,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                 <form onSubmit={handleSubmit}>
 
                     {/* ─── CUSTOMER DETAILS ───────────────── */}
-                    <div className="card mb-24">
+                    <div className="card mb-16">
                         <div className="card-header">
                             <h3 className="card-title flex gap-8"><User size={18} color="var(--gold)" /> Customer Details</h3>
                         </div>
@@ -511,7 +569,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                     </div>
 
                     {/* ─── MEASUREMENTS ───────────────────── */}
-                    <div className="card mb-24">
+                    <div className="card mb-16">
                         <div className="card-header flex-between">
                             <h3 className="card-title flex gap-8"><Ruler size={18} color="var(--gold)" /> Fittings & Measurements</h3>
                             <div className="flex gap-8" style={{ background: 'var(--ivory)', padding: 4, borderRadius: 20, border: '1px solid var(--gray-light)' }}>
@@ -555,6 +613,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                                             <div className="input-prefix">
                                                 <span className="prefix-symbol" style={{ fontSize: 11, padding: '10px 8px' }}>inches</span>
                                                 <input
+                                                    id={`meas_input_${f.key}`}
                                                     type="number"
                                                     step="any"
                                                     min="0"
@@ -571,7 +630,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                     </div>
 
                     {/* ─── SERVICES ───────────────────────── */}
-                    <div className="card mb-24">
+                    <div className="card mb-16">
                         <div className="card-header">
                             <h3 className="card-title flex gap-8"><Scissors size={18} color="var(--gold)" /> Services</h3>
                             <button type="button" className="btn btn-sm btn-outline" onClick={addService}>
@@ -657,7 +716,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                     </div>
 
                     {/* ─── DESIGN IMAGES ──────────────────── */}
-                    <div className="card mb-24">
+                    <div className="card mb-16">
                         <div className="card-header">
                             <h3 className="card-title flex gap-8"><ImageIcon size={18} color="var(--gold)" /> Design Reference Images</h3>
                             <span className="badge" style={{ background: '#E3F2FD', color: '#1565C0', border: '1px solid #BBDEFB', fontSize: 11 }}>
@@ -729,7 +788,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                     </div>
 
                     {/* ─── PAYMENT SUMMARY ────────────────── */}
-                    <div className="card mb-24">
+                    <div className="card mb-16">
                         <div className="card-header">
                             <h3 className="card-title flex gap-8"><CreditCard size={18} color="var(--gold)" /> Payment Summary</h3>
                         </div>
@@ -787,10 +846,12 @@ export default function NewOrder({ onMenuClick, auth }) {
                     </div>
 
                     {/* Submit */}
-                    <div className="flex gap-12" style={{ justifyContent: 'flex-end' }}>
+                    <div className="flex gap-12" style={{ justifyContent: 'flex-end', marginTop: 8, paddingBottom: 8 }}>
                         <button type="button" className="btn btn-ghost" onClick={() => { localStorage.removeItem('newOrderDraft'); navigate('/'); }}>Cancel</button>
-                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
-                            {loading ? 'Creating…' : '✓ Create Order & View Bill'}
+                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ minWidth: 200, justifyContent: 'center' }}>
+                            {loading ? (
+                                <><span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTop: '2px solid #fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />&nbsp;Creating..&nbsp;</>
+                            ) : '✓ Create Order & View Bill'}
                         </button>
                     </div>
 

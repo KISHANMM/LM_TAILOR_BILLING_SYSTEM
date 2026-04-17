@@ -88,6 +88,14 @@ async function initDB() {
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE
       )`,
+      `CREATE TABLE IF NOT EXISTS alterations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        total_alterations INTEGER NOT NULL DEFAULT 1,
+        amount_received REAL NOT NULL DEFAULT 0,
+        description TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      )`,
       `CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)`,
       `CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone_number)`,
       `CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id)`,
@@ -97,7 +105,8 @@ async function initDB() {
       `CREATE INDEX IF NOT EXISTS idx_services_order_id ON services(order_id)`,
       `CREATE INDEX IF NOT EXISTS idx_services_service_type ON services(service_type)`,
       `CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)`,
-      `CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category)`
+      `CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category)`,
+      `CREATE INDEX IF NOT EXISTS idx_alterations_date ON alterations(date)`
     ], "write");
     console.log('✅ Batch execution successful');
 

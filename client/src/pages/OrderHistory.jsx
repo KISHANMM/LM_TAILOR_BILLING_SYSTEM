@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List, Edit2, Check, X, User, Trash2 } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List, Edit2, Check, X, User, Trash2, AlertTriangle } from 'lucide-react';
 import api from '../api/axios';
 import { getOfflineOrders } from '../utils/offlineStore';
 
@@ -14,23 +14,30 @@ function formatDate(d) {
     return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const STATUS_OPTIONS = ['All', 'Pending', 'Ready', 'Delivered'];
+const STATUS_OPTIONS = ['All', 'Pending', 'Ready', 'Delivered', 'Overdue'];
 
 export default function OrderHistory({ onMenuClick }) {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('All');
+    const location = useLocation();
+    const initStatus = new URLSearchParams(location.search).get('status') || 'All';
+    const [statusFilter, setStatusFilter] = useState(STATUS_OPTIONS.includes(initStatus) ? initStatus : 'All');
     const [dateFilter, setDateFilter] = useState('');
     const [updatingId, setUpdatingId] = useState(null);
     const [viewMode, setViewMode] = useState(window.innerWidth < 768 ? 'cards' : 'table');
     const [editingAdvanceId, setEditingAdvanceId] = useState(null);
     const [tempAdvanceValue, setTempAdvanceValue] = useState('');
 
+    // Today's date string (YYYY-MM-DD) for overdue comparison
+    const todayStr = new Date().toISOString().split('T')[0];
+
     function fetchOrders() {
         setLoading(true);
         const params = new URLSearchParams();
-        if (statusFilter !== 'All') params.set('status', statusFilter);
+        // For Overdue, fetch all non-delivered orders then filter client-side
+        const apiStatus = statusFilter === 'Overdue' ? null : statusFilter;
+        if (apiStatus && apiStatus !== 'All') params.set('status', apiStatus);
         if (dateFilter) params.set('date', dateFilter);
         if (search) params.set('search', search);
         
@@ -66,7 +73,7 @@ export default function OrderHistory({ onMenuClick }) {
                         o.phone_number?.includes(s)
                     );
                 }
-                if (statusFilter !== 'All') {
+                if (statusFilter !== 'All' && statusFilter !== 'Overdue') {
                     parsedOffline = parsedOffline.filter(o => o.status === statusFilter);
                 }
                 if (dateFilter) {
@@ -76,7 +83,14 @@ export default function OrderHistory({ onMenuClick }) {
                 combined = [...parsedOffline, ...combined];
             }
 
-            if (statusFilter === 'Pending' || statusFilter === 'Ready') {
+            // Overdue: filter to only non-delivered orders with past delivery date
+            if (statusFilter === 'Overdue') {
+                combined = combined.filter(o =>
+                    o.status !== 'Delivered' && o.delivery_date < todayStr
+                );
+                // Sort by most overdue first (oldest delivery date first)
+                combined.sort((a, b) => new Date(a.delivery_date) - new Date(b.delivery_date));
+            } else if (statusFilter === 'Pending' || statusFilter === 'Ready') {
                 combined.sort((a, b) => new Date(a.delivery_date) - new Date(b.delivery_date));
             }
             setOrders(combined);
@@ -310,16 +324,50 @@ export default function OrderHistory({ onMenuClick }) {
                 </div>
 
                 {/* Status filter tabs */}
-                <div className="flex gap-8 mb-16">
-                    {STATUS_OPTIONS.map(s => (
-                        <button
-                            key={s}
-                            className={`btn btn-sm ${statusFilter === s ? 'btn-maroon' : 'btn-ghost'}`}
-                            onClick={() => setStatusFilter(s)}
-                        >
-                            {s}
-                        </button>
-                    ))}
+                <div className="flex gap-8 mb-16" style={{ flexWrap: 'wrap' }}>
+                    {STATUS_OPTIONS.map(s => {
+                        const isOverdue = s === 'Overdue';
+                        // Count overdue orders from current loaded data (only when not already on overdue tab)
+                        const overdueCount = isOverdue
+                            ? orders.filter(o => o.status !== 'Delivered' && o.delivery_date < todayStr).length
+                            : 0;
+                        return (
+                            <button
+                                key={s}
+                                className={`btn btn-sm ${statusFilter === s
+                                    ? isOverdue ? '' : 'btn-maroon'
+                                    : 'btn-ghost'
+                                }`}
+                                onClick={() => setStatusFilter(s)}
+                                style={isOverdue ? {
+                                    background: statusFilter === s ? '#B71C1C' : '#FFF0F0',
+                                    color: statusFilter === s ? '#fff' : '#B71C1C',
+                                    border: '1.5px solid #ef9a9a',
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 5
+                                } : {}}
+                            >
+                                {isOverdue && <AlertTriangle size={13} />}
+                                {s}
+                                {isOverdue && overdueCount > 0 && (
+                                    <span style={{
+                                        background: statusFilter === s ? 'rgba(255,255,255,0.3)' : '#B71C1C',
+                                        color: '#fff',
+                                        borderRadius: 10,
+                                        padding: '1px 7px',
+                                        fontSize: 11,
+                                        fontWeight: 800,
+                                        marginLeft: 2,
+                                        lineHeight: 1.5
+                                    }}>
+                                        {overdueCount}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 <div className="card">
@@ -353,8 +401,10 @@ export default function OrderHistory({ onMenuClick }) {
                                                     </td>
                                                 </tr>
                                             )}
-                                            {filtered.map(o => (
-                                                <tr key={o.order_id}>
+                                            {filtered.map(o => {
+                                                const isOverdueRow = o.status !== 'Delivered' && o.delivery_date < todayStr;
+                                                return (
+                                                <tr key={o.order_id} style={isOverdueRow ? { background: 'rgba(183,28,28,0.04)' } : {}}>
                                                     <td>
                                                         {o.isOfflineQueue ? (
                                                             <span style={{ fontWeight: 700, color: '#E65100', fontSize: 13 }} title="Pending Sync">Pending Sync</span>
@@ -448,7 +498,8 @@ export default function OrderHistory({ onMenuClick }) {
                                                         </div>
                                                     </td>
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>

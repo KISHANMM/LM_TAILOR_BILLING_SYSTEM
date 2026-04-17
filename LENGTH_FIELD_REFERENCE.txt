@@ -1,0 +1,98 @@
+================================================================================
+  LENGTH FIELD - HOW IT WORKS (Reference File)
+  Created: 02 Apr 2026
+  DO NOT CHANGE the column names described here without reading this first.
+================================================================================
+
+DATABASE COLUMN NAME
+---------------------
+The actual column that stores Blouse Length in the local SQLite DB (lm_tailor.db) is:
+
+    measurements.length   <-- THIS IS THE REAL COLUMN
+
+There is ALSO a column called "meas_length" in the DB, but it is an old/unused
+column added via ALTER TABLE migration. It contains no useful data. DO NOT write
+to meas_length and expect to see the value displayed anywhere.
+
+
+FRONTEND (NewOrder.jsx)
+------------------------
+The form uses the key:   m_length
+Example: measurements['m_length'] = '10'
+
+When submitting, this is packed into the measPayload:
+    const measPayload = {};
+    ALL_MEASUREMENT_KEYS.forEach(k => {
+        if (measurements[k]) measPayload[k] = parseFloat(measurements[k]);
+    });
+So the payload sent to the backend has: { m_length: 10, shoulder: 8, ... }
+
+
+BACKEND PATH 1 - Creating a New Order (orders.js)
+---------------------------------------------------
+File: server/routes/orders.js
+Route: POST /api/orders
+
+Receives:  measurements.m_length = 10
+
+Value extraction (line ~65):
+    parseFloat(m.length || m.m_length) || null
+    --> m.length is undefined (not in payload), so it falls back to m.m_length = 10 ✅
+
+SQL Write:
+    UPDATE measurements SET length=?, ...   <-- writes to "length" column ✅
+    INSERT INTO measurements (customer_id, length, ...) <-- inserts into "length" column ✅
+
+
+BACKEND PATH 2 - Edit Measurements (customers.js)
+---------------------------------------------------
+File: server/routes/customers.js
+Route: PUT /api/customers/:id/measurements
+
+Receives measurements object with key: m_length
+
+upsertMeasurements() helper (line ~89-95):
+    const { m_length, length, ... } = measurements;
+    const activeLength = m_length !== undefined ? m_length : length;
+    --> activeLength = 10 ✅
+
+SQL Write:
+    UPDATE measurements SET length=?, ...   <-- writes to "length" column ✅
+    INSERT INTO measurements (customer_id, length, ...) <-- inserts into "length" column ✅
+
+
+BACKEND READ - Customer Profile (customers.js)
+-----------------------------------------------
+File: server/routes/customers.js
+Routes: GET /api/customers, GET /api/customers/search, GET /api/customers/:id
+
+SQL Read:
+    SELECT m.length as m_length, ...   <-- reads from "length" column ✅
+
+The value comes back as "m_length" to the frontend, where it is displayed as:
+    Length: {customer.m_length}"
+
+
+SUMMARY TABLE
+--------------
+| Step                  | Column Used     | Status |
+|-----------------------|-----------------|--------|
+| Frontend form key     | m_length        | ✅     |
+| orders.js value read  | m.m_length      | ✅     |
+| orders.js SQL write   | length          | ✅     |
+| customers.js write    | length          | ✅     |
+| customers.js SELECT   | m.length        | ✅     |
+
+
+WARNING - DO NOT DO THIS
+--------------------------
+❌ Do NOT change the SQL column from "length" to "meas_length" in orders.js or customers.js.
+   "meas_length" is an empty shadow column and changing to it will make Length show as "-".
+
+❌ Do NOT rename the frontend key from "m_length" to "length" without checking both
+   orders.js extraction (line ~65) and customers.js upsertMeasurements (line ~95).
+
+❌ Do NOT trust only db.js schema for column names — the actual DB on disk was created
+   with the old schema and has the "length" column as the real one.
+
+================================================================================

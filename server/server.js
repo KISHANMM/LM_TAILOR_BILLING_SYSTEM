@@ -11,6 +11,7 @@ const ordersRouter = require('./routes/orders');
 const dashboardRouter = require('./routes/dashboard');
 const pdfRouter = require('./routes/pdf');
 const analyticsRouter = require('./routes/analytics');
+const alterationsRouter = require('./routes/alterations');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -40,6 +41,7 @@ app.use('/api/orders', ordersRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/pdf', pdfRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/alterations', alterationsRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

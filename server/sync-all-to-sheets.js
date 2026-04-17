@@ -52,8 +52,10 @@ async function run() {
         return;
     }
 
-    // 3. Re-insert every single order using the updated appendOrderToSheet logic
-    console.log('✍️ Writing orders to sheet sequentially...');
+    // 3. Prepare every single order and sync in one batch
+    console.log('✍️ Preparing orders and syncing in one batch...');
+    const fullOrderData = [];
+
     for (let i = 0; i < orders.length; i++) {
         const order = orders[i];
         
@@ -71,14 +73,13 @@ async function run() {
         });
         order.measurements = measRs.rows[0] || {};
 
-        // Use append logic
-        await appendOrderToSheet(order);
-        
-        // Slight delay to avoid hitting Google Sheets API rate limits
-        await new Promise(r => setTimeout(r, 800));
+        fullOrderData.push(order);
     }
 
-    console.log('🎉 Full Sync Complete! Written', orders.length, 'orders.');
+    const { syncOrdersToSheet } = require('./sheets');
+    await syncOrdersToSheet(fullOrderData);
+
+    console.log('🎉 Full Sync Complete! Synchronized', orders.length, 'orders.');
     process.exit(0);
 }
 

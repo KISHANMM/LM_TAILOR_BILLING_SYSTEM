@@ -11,6 +11,7 @@ import Analytics from './pages/Analytics';
 import Login from './pages/Login';
 import WorkerDashboard from './pages/WorkerDashboard';
 import Profits from './pages/Profits';
+import Alterations from './pages/Alterations';
 import './index.css';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import useOfflineSync from './hooks/useOfflineSync';
@@ -60,7 +61,7 @@ export default function App() {
   if (!auth) {
     return (
       <BrowserRouter>
-        <Toaster position="top-center" />
+        <Toaster position="top-center" toastOptions={{ duration: 2000 }} />
         <Routes>
           <Route path="*" element={<Login setAuth={setAuth} />} />
         </Routes>
@@ -74,7 +75,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Toaster position="top-center" />
+      <Toaster position="top-center" toastOptions={{ duration: 2000 }} />
       <div className={`app-layout ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <OfflineBannerWrapper isOnline={isOnline} isSyncing={isSyncing} syncOfflineOrders={syncOfflineOrders} />
         <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} auth={auth} setAuth={setAuth} />
@@ -89,12 +90,13 @@ export default function App() {
 
             {isAdmin && (
               <>
-                <Route path="/search" element={<CustomerSearch onMenuClick={toggleSidebar} />} />
-                <Route path="/customer/:id" element={<CustomerSearch onMenuClick={toggleSidebar} />} />
-                <Route path="/orders" element={<OrderHistory onMenuClick={toggleSidebar} />} />
-                <Route path="/bill/:orderId" element={<BillPreview onMenuClick={toggleSidebar} />} />
-                <Route path="/analytics" element={<Analytics onMenuClick={toggleSidebar} />} />
-                <Route path="/profits" element={<Profits onMenuClick={toggleSidebar} />} />
+                  <Route path="/search" element={<CustomerSearch onMenuClick={toggleSidebar} />} />
+                  <Route path="/customer/:id" element={<CustomerSearch onMenuClick={toggleSidebar} />} />
+                  <Route path="/orders" element={<OrderHistory onMenuClick={toggleSidebar} />} />
+                  <Route path="/bill/:orderId" element={<BillPreview onMenuClick={toggleSidebar} />} />
+                  <Route path="/analytics" element={<Analytics onMenuClick={toggleSidebar} />} />
+                  <Route path="/profits" element={<Profits onMenuClick={toggleSidebar} />} />
+                  <Route path="/alterations" element={<Alterations onMenuClick={toggleSidebar} />} />
               </>
             )}
 
