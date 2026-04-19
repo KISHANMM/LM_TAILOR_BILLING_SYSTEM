@@ -14,8 +14,8 @@ const CATEGORIES = [
 
 const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN');
 
-/* ── Period stat row: 3 big clear cards ─────────────────────────────────── */
-function PeriodCards({ income, expense, profit, loading }) {
+/* ── Period stat row: 4 big clear cards ─────────────────────────────────── */
+function PeriodCards({ income, expense, profit, balance, loading }) {
     const cards = [
         { label: 'Income',   value: income,  bg: '#6A1E2E', border: '#a0304a', icon: TrendingUp },
         { label: 'Expenses', value: expense, bg: '#b71c1c', border: '#d32f2f', icon: TrendingDown },
@@ -26,10 +26,17 @@ function PeriodCards({ income, expense, profit, loading }) {
             border: profit >= 0 ? '#2e7d32' : '#6a1b9a',
             icon: DollarSign,
         },
+        {
+            label: 'Balance',
+            value: balance,
+            bg: '#E65100',
+            border: '#EF6C00',
+            icon: Layers,
+        },
     ];
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
             {cards.map(({ label, value, bg, border, icon: Icon }) => (
                 <div key={label} style={{
                     background: bg,
@@ -187,10 +194,10 @@ function ExpenseRow({ exp, onDelete }) {
 /* ── Main Component ─────────────────────────────────────────────────────── */
 export default function Analytics({ onMenuClick }) {
     const [summary, setSummary] = useState({
-        today_income: 0, today_expense: 0, today_profit: 0,
-        monthly_income: 0, monthly_expense: 0, monthly_profit: 0,
-        yearly_income: 0, yearly_expense: 0, yearly_profit: 0,
-        total_income: 0, total_expense: 0, net_profit: 0,
+        today_income: 0, today_expense: 0, today_profit: 0, today_balance: 0,
+        monthly_income: 0, monthly_expense: 0, monthly_profit: 0, monthly_balance: 0,
+        yearly_income: 0, yearly_expense: 0, yearly_profit: 0, yearly_balance: 0,
+        total_income: 0, total_expense: 0, net_profit: 0, total_balance: 0,
     });
     const [expenses, setExpenses] = useState([]);
     const [topServices, setTopServices] = useState([]);
@@ -300,19 +307,19 @@ export default function Analytics({ onMenuClick }) {
                 {/* ── Period Summary Sections ────────────────────────────── */}
                 <div style={{ marginBottom: 20 }}>
                     <Section title="Today" isOpen={expanded.today} onToggle={() => toggle('today')} badge="Live" accentColor="#6A1E2E">
-                        <PeriodCards income={summary.today_income} expense={summary.today_expense} profit={summary.today_profit} loading={loading} />
+                        <PeriodCards income={summary.today_income} expense={summary.today_expense} profit={summary.today_profit} balance={summary.today_balance} loading={loading} />
                     </Section>
 
                     <Section title="This Month" isOpen={expanded.month} onToggle={() => toggle('month')} accentColor="#1565C0">
-                        <PeriodCards income={summary.monthly_income} expense={summary.monthly_expense} profit={summary.monthly_profit} loading={loading} />
+                        <PeriodCards income={summary.monthly_income} expense={summary.monthly_expense} profit={summary.monthly_profit} balance={summary.monthly_balance} loading={loading} />
                     </Section>
 
                     <Section title="This Year" isOpen={expanded.year} onToggle={() => toggle('year')} accentColor="#2E7D32">
-                        <PeriodCards income={summary.yearly_income} expense={summary.yearly_expense} profit={summary.yearly_profit} loading={loading} />
+                        <PeriodCards income={summary.yearly_income} expense={summary.yearly_expense} profit={summary.yearly_profit} balance={summary.yearly_balance} loading={loading} />
                     </Section>
 
                     <Section title="All Time" isOpen={expanded.allTime} onToggle={() => toggle('allTime')} accentColor="#5c35a6">
-                        <PeriodCards income={summary.total_income} expense={summary.total_expense} profit={summary.net_profit} loading={loading} />
+                        <PeriodCards income={summary.total_income} expense={summary.total_expense} profit={summary.net_profit} balance={summary.total_balance} loading={loading} />
                     </Section>
                 </div>
 

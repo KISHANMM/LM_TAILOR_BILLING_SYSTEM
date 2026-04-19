@@ -123,6 +123,11 @@ async function getSummaryData() {
         today_expense: "SELECT sum(amount) as val FROM expenses WHERE date = date('now', 'localtime')",
         monthly_expense: "SELECT sum(amount) as val FROM expenses WHERE substr(date, 1, 7) = substr(date('now', 'localtime'), 1, 7)",
         yearly_expense: "SELECT sum(amount) as val FROM expenses WHERE substr(date, 1, 4) = substr(date('now', 'localtime'), 1, 4)",
+
+        total_balance: "SELECT sum(total_amount - advance_paid) as val FROM orders WHERE status != 'Delivered'",
+        today_balance: "SELECT sum(total_amount - advance_paid) as val FROM orders WHERE status != 'Delivered' AND booking_date = date('now', 'localtime')",
+        monthly_balance: "SELECT sum(total_amount - advance_paid) as val FROM orders WHERE status != 'Delivered' AND substr(booking_date, 1, 7) = substr(date('now', 'localtime'), 1, 7)",
+        yearly_balance: "SELECT sum(total_amount - advance_paid) as val FROM orders WHERE status != 'Delivered' AND substr(booking_date, 1, 4) = substr(date('now', 'localtime'), 1, 4)",
     };
 
     const queryEntries = Object.entries(queries);
