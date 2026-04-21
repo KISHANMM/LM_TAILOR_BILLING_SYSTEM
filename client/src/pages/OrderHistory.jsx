@@ -25,7 +25,7 @@ export default function OrderHistory({ onMenuClick }) {
     const [statusFilter, setStatusFilter] = useState(STATUS_OPTIONS.includes(initStatus) ? initStatus : 'All');
     const [dateFilter, setDateFilter] = useState('');
     const [updatingId, setUpdatingId] = useState(null);
-    const [viewMode, setViewMode] = useState(window.innerWidth < 768 ? 'cards' : 'table');
+    const [viewMode, setViewMode] = useState('cards');
     const [editingAdvanceId, setEditingAdvanceId] = useState(null);
     const [tempAdvanceValue, setTempAdvanceValue] = useState('');
 

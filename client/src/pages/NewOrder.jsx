@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, ChevronDown, User, Ruler, Scissors, CreditCard, Search, Menu, Image as ImageIcon, Camera, X, Mic, Square, Trash, PenTool } from 'lucide-react';
 import toast from 'react-hot-toast';
+import QRCode from 'react-qr-code';
 import api from '../api/axios';
 import ScratchPad from '../components/ScratchPad';
 import { saveOfflineOrder } from '../utils/offlineStore';
@@ -821,6 +822,21 @@ export default function NewOrder({ onMenuClick, auth }) {
                                             <option value="Cash">Cash</option>
                                             <option value="PhonePe">PhonePe</option>
                                         </select>
+                                        {paymentMethod === 'PhonePe' && advance > 0 && (
+                                            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid var(--gray-light)' }}>
+                                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--maroon)', marginBottom: 8, textAlign: 'center' }}>
+                                                    Scan to Pay Advance: {`\u20b9${advance.toFixed(2)}`}
+                                                </div>
+                                                <QRCode 
+                                                    value={`upi://pay?pa=9916562127@ibl&pn=LM%20Ladies%20Tailor&am=${advance.toFixed(2)}&cu=INR`} 
+                                                    size={120} 
+                                                    level="L" 
+                                                />
+                                                <div style={{ fontSize: 10, color: 'var(--gray)', marginTop: 8, textAlign: 'center' }}>
+                                                    Scan with PhonePe, GPay, or Paytm
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div>

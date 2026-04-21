@@ -206,7 +206,7 @@ export default function Analytics({ onMenuClick }) {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
-    const [expanded, setExpanded] = useState({ today: true, month: true, year: true, allTime: false });
+    const [expanded, setExpanded] = useState({ today: false, month: false, year: false, allTime: false });
     const toggle = (k) => setExpanded(p => ({ ...p, [k]: !p[k] }));
 
     const [form, setForm] = useState({

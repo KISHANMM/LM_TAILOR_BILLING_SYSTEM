@@ -9,6 +9,7 @@ As requested by the user, these following features should be implemented in the 
 
 2. **Automated WhatsApp Reminders**:
    - Send automatic WhatsApp messages to customers when their order status is changed to "Ready".
+      (Done)
 
 3. **Advanced Interactive Analytics**:
    - Implement deeper insights, such as Top Services (e.g., Saree Fall, Bridal Blouse) that generate the most revenue.

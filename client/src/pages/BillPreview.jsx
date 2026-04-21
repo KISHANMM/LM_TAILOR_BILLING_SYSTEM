@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Download, Share2, Printer, ChevronLeft, CheckCircle, Clock, Menu, Image as ImageIcon, X, Mic } from 'lucide-react';
+import QRCode from 'react-qr-code';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { getOfflineOrders } from '../utils/offlineStore';
@@ -358,7 +359,24 @@ export default function BillPreview({ onMenuClick }) {
                                 </div>
                             )}
 
-
+                            {/* Dynamic UPI QR Code for Pending Balance */}
+                            {parseFloat(order.balance_amount) > 0 && order.status !== 'Delivered' && (
+                                <div className="bill-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderTop: '1px dashed var(--gray-light)', padding: '16px 0', borderBottom: '1px solid transparent' }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#E65100', marginBottom: 8, textAlign: 'center' }}>
+                                        Pending Balance: {`\u20b9${parseFloat(order.balance_amount).toFixed(2)}`}
+                                    </div>
+                                    <div style={{ background: '#fff', padding: 8, borderRadius: 8, border: '1px solid var(--gray-light)' }}>
+                                        <QRCode 
+                                            value={`upi://pay?pa=9916562127@ibl&pn=LM%20Ladies%20Tailor&am=${parseFloat(order.balance_amount).toFixed(2)}&cu=INR`} 
+                                            size={100} 
+                                            level="L" 
+                                        />
+                                    </div>
+                                    <div style={{ fontSize: 10, color: 'var(--gray)', marginTop: 8, textAlign: 'center' }}>
+                                        Scan with PhonePe, GPay, or Paytm to pay
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Footer */}
                             <div style={{ background: 'var(--maroon-dark)', color: 'rgba(198,167,94,0.6)', textAlign: 'center', padding: '14px 20px', fontSize: 11, borderTop: '2px solid var(--gold)' }}>
