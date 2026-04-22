@@ -69,7 +69,7 @@ export default function NewOrder({ onMenuClick, auth }) {
     const [customerFound, setCustomerFound] = useState(initialDraft?.customerFound ?? false);
 
     // Dates & Assignment
-    const [bookingDate, setBookingDate] = useState(initialDraft?.bookingDate || today);
+    const [bookingDate, setBookingDate] = useState(today); // Always default to today to prevent stale dates from drafts
     const [deliveryDate, setDeliveryDate] = useState(initialDraft?.deliveryDate || '');
     const [assignedWorker, setAssignedWorker] = useState(initialDraft?.assignedWorker || 'Praveen');
 
