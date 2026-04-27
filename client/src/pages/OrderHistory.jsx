@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List, Edit2, Check, X, User, Trash2, AlertTriangle } from 'lucide-react';
 import api from '../api/axios';
 import { getOfflineOrders } from '../utils/offlineStore';
@@ -25,7 +25,7 @@ export default function OrderHistory({ onMenuClick }) {
     const [statusFilter, setStatusFilter] = useState(STATUS_OPTIONS.includes(initStatus) ? initStatus : 'All');
     const [dateFilter, setDateFilter] = useState('');
     const [updatingId, setUpdatingId] = useState(null);
-    const [viewMode, setViewMode] = useState('cards');
+    const [viewMode, setViewMode] = useState('table');
     const [editingAdvanceId, setEditingAdvanceId] = useState(null);
     const [tempAdvanceValue, setTempAdvanceValue] = useState('');
 
@@ -476,6 +476,7 @@ export default function OrderHistory({ onMenuClick }) {
                                                             <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
                                                                 <Eye size={14} /> Bill
                                                             </Link>
+
                                                             {!o.isOfflineQueue && o.status === 'Delivered' && (
                                                                 <button
                                                                     className="btn btn-sm btn-maroon"
@@ -593,6 +594,15 @@ export default function OrderHistory({ onMenuClick }) {
                                                 <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
                                                     <Eye size={12} /> Bill
                                                 </Link>
+                                                {!o.isOfflineQueue && (
+                                                    <Link
+                                                        to={`/edit-order/${o.order_id}`}
+                                                        className="btn btn-sm btn-outline"
+                                                        style={{ borderColor: 'var(--maroon)', color: 'var(--maroon)', fontWeight: 600 }}
+                                                    >
+                                                        <Edit2 size={12} /> Edit Bill
+                                                    </Link>
+                                                )}
                                                 {!o.isOfflineQueue && o.status === 'Delivered' && (
                                                     <button
                                                         className="btn btn-sm btn-outline"

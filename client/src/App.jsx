@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import WorkerDashboard from './pages/WorkerDashboard';
 import Profits from './pages/Profits';
 import Alterations from './pages/Alterations';
+import EditOrder from './pages/EditOrder';
 import './index.css';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import useOfflineSync from './hooks/useOfflineSync';
@@ -94,6 +95,7 @@ export default function App() {
                   <Route path="/customer/:id" element={<CustomerSearch onMenuClick={toggleSidebar} />} />
                   <Route path="/orders" element={<OrderHistory onMenuClick={toggleSidebar} />} />
                   <Route path="/bill/:orderId" element={<BillPreview onMenuClick={toggleSidebar} />} />
+                  <Route path="/edit-order/:orderId" element={<EditOrder onMenuClick={toggleSidebar} />} />
                   <Route path="/analytics" element={<Analytics onMenuClick={toggleSidebar} />} />
                   <Route path="/profits" element={<Profits onMenuClick={toggleSidebar} />} />
                   <Route path="/alterations" element={<Alterations onMenuClick={toggleSidebar} />} />

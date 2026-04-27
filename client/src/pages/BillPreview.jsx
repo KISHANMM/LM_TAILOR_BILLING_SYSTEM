@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Download, Share2, Printer, ChevronLeft, CheckCircle, Clock, Menu, Image as ImageIcon, X, Mic } from 'lucide-react';
+import { Download, Share2, Printer, ChevronLeft, CheckCircle, Clock, Menu, Image as ImageIcon, X, Mic, Edit2 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
@@ -502,6 +502,15 @@ export default function BillPreview({ onMenuClick }) {
                                 <Link to="/" className="btn btn-ghost" style={{ justifyContent: 'center' }}>Dashboard</Link>
                                 <Link to="/new-order" className="btn btn-outline" style={{ justifyContent: 'center' }}>New Order</Link>
                                 <Link to="/orders" className="btn btn-ghost" style={{ justifyContent: 'center' }}>All Orders</Link>
+                                {order.order_id !== 'Offline Pending' && (
+                                    <Link
+                                        to={`/edit-order/${order.order_id}`}
+                                        className="btn btn-outline"
+                                        style={{ justifyContent: 'center', borderColor: 'var(--maroon)', color: 'var(--maroon)', fontWeight: 600 }}
+                                    >
+                                        <Edit2 size={14} /> Edit Bill
+                                    </Link>
+                                )}
                                 {order.customer_id && (
                                     <Link to={`/customer/${order.customer_id}`} className="btn btn-outline" style={{ justifyContent: 'center' }}>📏 Measurements</Link>
                                 )}
