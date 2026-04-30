@@ -206,9 +206,14 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
     try {
         const { status, date, search, worker, sort } = req.query;
-        let query = `SELECT o.*, c.name as customer_name, c.phone_number
+        let query = `SELECT o.*, c.name as customer_name, c.phone_number,
+               m.length as m_length, m.shoulder, m.chest, m.waist, m.dot, m.back_neck, 
+               m.front_neck, m.sleeves_length, m.armhole, m.chest_distance, m.sleeves_round,
+               m.t_length, m.t_shoulder, m.t_chest, m.t_waist, m.t_back_neck, m.t_front_neck, m.t_sleeves_length, m.t_sleeves_round, m.t_half_body, m.t_hip,
+               m.b_length, m.b_bottom_round, m.b_hip, m.b_fly, m.b_thai, m.b_knee
         FROM orders o 
         JOIN customers c ON c.id = o.customer_id 
+        LEFT JOIN measurements m ON m.customer_id = c.id
         WHERE 1=1`;
         const params = [];
 

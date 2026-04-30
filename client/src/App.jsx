@@ -88,11 +88,11 @@ export default function App() {
           <Routes>
             <Route path="/" element={isAdmin ? <Dashboard onMenuClick={toggleSidebar} /> : <WorkerDashboard onMenuClick={toggleSidebar} auth={auth} />} />
             <Route path="/new-order" element={<NewOrder onMenuClick={toggleSidebar} auth={auth} />} />
+            <Route path="/customer/:id" element={<CustomerSearch onMenuClick={toggleSidebar} auth={auth} />} />
 
             {isAdmin && (
               <>
-                  <Route path="/search" element={<CustomerSearch onMenuClick={toggleSidebar} />} />
-                  <Route path="/customer/:id" element={<CustomerSearch onMenuClick={toggleSidebar} />} />
+                  <Route path="/search" element={<CustomerSearch onMenuClick={toggleSidebar} auth={auth} />} />
                   <Route path="/orders" element={<OrderHistory onMenuClick={toggleSidebar} />} />
                   <Route path="/bill/:orderId" element={<BillPreview onMenuClick={toggleSidebar} />} />
                   <Route path="/edit-order/:orderId" element={<EditOrder onMenuClick={toggleSidebar} />} />

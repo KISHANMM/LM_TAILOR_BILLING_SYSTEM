@@ -1,22 +1,9 @@
-import React, { useEffect, useState, Fragment } from 'react';
-import { Link } from 'react-router-dom';
-import { Package, Clock, CheckCircle, Menu, Eye, Plus, ChevronDown, ChevronUp, Ruler } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Package, Clock, CheckCircle, Menu, Plus } from 'lucide-react';
 import api from '../api/axios';
 import { toast } from 'react-hot-toast';
-
-const MEASUREMENT_FIELDS = [
-    { key: 'm_length', label: 'Length' },
-    { key: 'shoulder', label: 'Shoulder' },
-    { key: 'chest', label: 'Chest' },
-    { key: 'waist', label: 'Waist' },
-    { key: 'dot', label: 'Dot' },
-    { key: 'back_neck', label: 'Back Neck' },
-    { key: 'front_neck', label: 'Front Neck' },
-    { key: 'sleeves_length', label: 'Sleeves Length' },
-    { key: 'armhole', label: 'Armhole' },
-    { key: 'chest_distance', label: 'Chest Distance' },
-    { key: 'sleeves_round', label: 'Sleeves Round' },
-];
+import { getWorkerTasksOffline, saveWorkerTasksOffline } from '../utils/offlineStore';
 
 function StatusBadge({ status }) {
     const cls = {
@@ -35,62 +22,40 @@ function formatDate(d) {
 export default function WorkerDashboard({ onMenuClick, auth }) {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [updatingId, setUpdatingId] = useState(null);
-    const [expandedId, setExpandedId] = useState(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         if (auth?.name) fetchOrders();
     }, [auth.name]);
 
+    const processAndSetOrders = (data) => {
+        const activeOrders = data
+            .filter(o => o.status !== 'Delivered')
+            .sort((a, b) => new Date(a.delivery_date) - new Date(b.delivery_date));
+        setOrders(activeOrders);
+    };
+
     const fetchOrders = async () => {
         try {
             setLoading(true);
-            const response = await api.get(`/orders?worker=${auth.name}`);
-            setOrders(response.data);
-        } catch (error) {
-            console.error('Error fetching worker orders:', error);
-            toast.error('Failed to load orders');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleWhatsAppReady = (order) => {
-        let phoneForUrl = order.phone_number.replace(/\D/g, '');
-        if (phoneForUrl.length === 10) phoneForUrl = '91' + phoneForUrl;
-
-        const msg = encodeURIComponent(
-            `Dear ${order.customer_name},\n\n` +
-            `Your blouse is ready to collect!\n\n` +
-            `Order No: #${String(order.order_id).padStart(4, '0')}\n` +
-            `Balance Amount: ₹${order.balance_amount.toLocaleString('en-IN')}\n\n` +
-            `*( Reminder : Please Give us a Call Before Coming to Shop at +919916562127 )*\n\n` +
-            `Please visit us soon. – L.M. Ladies Tailor`
-        );
-        window.open(`https://wa.me/${phoneForUrl}?text=${msg}`, '_blank');
-    };
-
-    const handleStatusUpdate = async (e, orderId, newStatus) => {
-        e.stopPropagation(); // Prevent accordion from toggling
-        if (updatingId) return;
-
-        try {
-            setUpdatingId(orderId);
-            await api.put(`/orders/${orderId}`, { status: newStatus });
-            
-            // Trigger WhatsApp if status becomes 'Ready'
-            if (newStatus === 'Ready') {
-                const targetOrder = orders.find(o => o.order_id === orderId);
-                if (targetOrder) handleWhatsAppReady(targetOrder);
+            const offlineTasks = await getWorkerTasksOffline();
+            if (offlineTasks && offlineTasks.length > 0) {
+                processAndSetOrders(offlineTasks);
+                setLoading(false);
             }
 
-            toast.success(`Order marked as ${newStatus}`);
-            fetchOrders();
+            if (navigator.onLine) {
+                const response = await api.get(`/orders?worker=${auth.name}`);
+                processAndSetOrders(response.data);
+                await saveWorkerTasksOffline(response.data);
+            } else if (!offlineTasks || offlineTasks.length === 0) {
+                toast.error('You are offline and have no cached tasks.');
+            }
         } catch (error) {
-            console.error('Error updating status:', error);
-            toast.error('Failed to update status');
+            console.error('Error fetching worker orders:', error);
+            if (navigator.onLine) toast.error('Failed to load orders');
         } finally {
-            setUpdatingId(null);
+            setLoading(false);
         }
     };
 
@@ -153,102 +118,51 @@ export default function WorkerDashboard({ onMenuClick, auth }) {
                     <div className="card-header">
                         <h3 className="card-title flex gap-8"><Clock size={18} color="var(--gold)" /> Your Assigned Orders</h3>
                     </div>
-                    <div className="table-container" style={{ border: 'none' }}>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>#</th><th>Customer</th><th>Booking</th><th>Delivery</th><th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {orders.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--gray)' }}>
-                                            No assigned orders
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    orders.map(o => (
-                                        <Fragment key={o.order_id}>
-                                            <tr style={{ cursor: 'pointer' }} onClick={() => setExpandedId(expandedId === o.order_id ? null : o.order_id)}>
-                                                <td><span style={{ fontWeight: 600, color: 'var(--maroon)' }}>#{String(o.order_id).padStart(4, '0')}</span></td>
-                                                <td><strong>{o.customer_name}</strong></td>
-                                                <td style={{ fontSize: 13 }}>{formatDate(o.booking_date)}</td>
-                                                <td style={{ fontSize: 13 }}>{formatDate(o.delivery_date)}</td>
-                                                <td>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <StatusBadge status={o.status} />
-                                                        {expandedId === o.order_id ? <ChevronUp size={16} color="var(--gray)" /> : <ChevronDown size={16} color="var(--gray)" />}
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div style={{ display: 'flex', gap: 8 }}>
-                                                        {o.status === 'Pending' && (
-                                                            <button
-                                                                className="btn btn-sm btn-outline"
-                                                                style={{ borderColor: 'var(--green)', color: 'var(--green)', fontSize: 11, padding: '4px 8px' }}
-                                                                onClick={(e) => handleStatusUpdate(e, o.order_id, 'Ready')}
-                                                                disabled={updatingId === o.order_id}
-                                                            >
-                                                                Mark Ready
-                                                            </button>
-                                                        )}
-                                                        {o.status === 'Ready' && (
-                                                            <button
-                                                                className="btn btn-sm btn-outline"
-                                                                style={{ borderColor: 'var(--maroon)', color: 'var(--maroon)', fontSize: 11, padding: '4px 8px' }}
-                                                                onClick={(e) => handleStatusUpdate(e, o.order_id, 'Delivered')}
-                                                                disabled={updatingId === o.order_id}
-                                                            >
-                                                                Deliver Order
-                                                            </button>
-                                                        )}
-                                                        {o.status === 'Delivered' && (
-                                                            <span style={{ fontSize: 11, color: 'var(--gray)' }}>Done</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            {expandedId === o.order_id && (
-                                                <tr>
-                                                    <td colSpan={6} style={{ background: 'var(--ivory)', padding: '16px 24px', borderBottom: '2px solid var(--maroon)' }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                                <Ruler size={16} color="var(--gold)" />
-                                                                <h4 style={{ margin: 0, fontSize: 14, color: 'var(--maroon)' }}>Customer Measurements</h4>
-                                                            </div>
-                                                            <div style={{ display: 'flex', gap: 8 }}>
-                                                                {o.status === 'Pending' && (
-                                                                    <button className="btn btn-sm btn-outline" style={{ borderColor: 'var(--green)', color: 'var(--green)' }} onClick={(e) => handleStatusUpdate(e, o.order_id, 'Ready')} disabled={updatingId === o.order_id}>Mark as Ready</button>
-                                                                )}
-                                                                {o.status === 'Ready' && (
-                                                                    <button className="btn btn-sm" style={{ backgroundColor: 'var(--maroon)', color: 'white' }} onClick={(e) => handleStatusUpdate(e, o.order_id, 'Delivered')} disabled={updatingId === o.order_id}>Deliver Now</button>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '8px 16px' }}>
-                                                            {MEASUREMENT_FIELDS.map(m => o[m.key] ? (
-                                                                <div key={m.key} style={{ fontSize: 13 }}>
-                                                                    <span style={{ color: 'var(--gray)' }}>{m.label}:</span> <strong style={{ marginLeft: 4 }}>{o[m.key]}"</strong>
-                                                                </div>
-                                                            ) : null)}
-                                                            {!MEASUREMENT_FIELDS.some(m => o[m.key]) && (
-                                                                <div style={{ fontSize: 13, color: 'var(--gray)', fontStyle: 'italic' }}>No measurements provided or using sample piece.</div>
-                                                            )}
-                                                        </div>
-                                                        {o.notes && (
-                                                            <div style={{ marginTop: 16, padding: 12, background: '#fff', border: '1px solid var(--gray-light)', borderRadius: 6, fontSize: 13 }}>
-                                                                <strong style={{ color: 'var(--maroon)' }}>Notes:</strong> <span style={{ marginLeft: 4 }}>{o.notes}</span>
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </Fragment>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                    <div className="card-body" style={{ padding: 16 }}>
+                        {orders.length === 0 ? (
+                            <div className="empty-state">
+                                No assigned orders
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+                                {orders.map(o => (
+                                    <div 
+                                        key={o.order_id} 
+                                        onClick={() => navigate(`/customer/${o.customer_id}`, { state: { offlineData: o } })}
+                                        style={{ 
+                                            cursor: 'pointer', 
+                                            background: '#fff', 
+                                            border: '1px solid var(--gray-light)', 
+                                            borderRadius: 12, 
+                                            padding: 16, 
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.04)', 
+                                            position: 'relative',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; e.currentTarget.style.borderColor = 'var(--gold)'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.borderColor = 'var(--gray-light)'; }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                                            <div>
+                                                <div style={{ fontSize: 13, color: 'var(--gray)', fontWeight: 500, marginBottom: 4 }}>Order #{String(o.order_id).padStart(4, '0')}</div>
+                                                <div style={{ fontSize: 18, fontFamily: 'var(--font-serif)', color: 'var(--maroon-dark)', fontWeight: 600 }}>{o.customer_name}</div>
+                                            </div>
+                                            <StatusBadge status={o.status} />
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'var(--ivory)', padding: 12, borderRadius: 8, border: '1px solid var(--gold-pale)' }}>
+                                            <div>
+                                                <div style={{ fontSize: 11, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Booking Date</div>
+                                                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--maroon)' }}>{formatDate(o.booking_date)}</div>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: 11, color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Delivery By</div>
+                                                <div style={{ fontSize: 13, fontWeight: 600, color: '#E65100' }}>{formatDate(o.delivery_date)}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

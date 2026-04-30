@@ -5,15 +5,22 @@ const ORDERS_STORE = 'orders-queue';
 const CUSTOMERS_STORE = 'customers-cache';
 
 export async function initDB() {
-  return openDB(DB_NAME, 2, {
+  return openDB(DB_NAME, 3, {
     upgrade(db, oldVersion) {
-      if (!db.objectStoreNames.contains(ORDERS_STORE)) {
-        db.createObjectStore(ORDERS_STORE, { keyPath: 'id', autoIncrement: true });
+      if (oldVersion < 2) {
+        if (!db.objectStoreNames.contains(ORDERS_STORE)) {
+          db.createObjectStore(ORDERS_STORE, { keyPath: 'id', autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains(CUSTOMERS_STORE)) {
+          const custStore = db.createObjectStore(CUSTOMERS_STORE, { keyPath: 'id' });
+          custStore.createIndex('phone', 'phone_number', { unique: false });
+          custStore.createIndex('name', 'name', { unique: false });
+        }
       }
-      if (!db.objectStoreNames.contains(CUSTOMERS_STORE)) {
-        const custStore = db.createObjectStore(CUSTOMERS_STORE, { keyPath: 'id' });
-        custStore.createIndex('phone', 'phone_number', { unique: false });
-        custStore.createIndex('name', 'name', { unique: false });
+      if (oldVersion < 3) {
+        if (!db.objectStoreNames.contains('worker-tasks-cache')) {
+          db.createObjectStore('worker-tasks-cache', { keyPath: 'order_id' });
+        }
       }
     },
   });
@@ -84,4 +91,18 @@ export async function searchOfflineCustomers(query) {
   } else {
     return allCustomers.filter(c => c.name?.toLowerCase().includes(q));
   }
+}
+
+// ---- WORKER TASKS ----
+export async function saveWorkerTasksOffline(tasks) {
+  const db = await initDB();
+  const tx = db.transaction('worker-tasks-cache', 'readwrite');
+  await tx.store.clear();
+  tasks.forEach(t => tx.store.put(t));
+  await tx.done;
+}
+
+export async function getWorkerTasksOffline() {
+  const db = await initDB();
+  return db.getAll('worker-tasks-cache');
 }

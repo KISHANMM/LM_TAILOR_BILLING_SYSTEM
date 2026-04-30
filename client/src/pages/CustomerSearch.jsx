@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu, LayoutGrid, List } from 'lucide-react';
 import api from '../api/axios';
 import { searchOfflineCustomers, getOfflineCustomerById } from '../utils/offlineStore';
@@ -31,8 +31,10 @@ function formatDate(d) {
     return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default function CustomerSearch({ onMenuClick }) {
+export default function CustomerSearch({ onMenuClick, auth }) {
+    const isAdmin = auth?.role === 'Admin';
     const { id } = useParams();
+    const navigate = useNavigate();
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
     const [selected, setSelected] = useState(null);
@@ -44,6 +46,7 @@ export default function CustomerSearch({ onMenuClick }) {
     const [editInfoForm, setEditInfoForm] = useState({});
     const [viewMode, setViewMode] = useState(window.innerWidth < 768 ? 'cards' : 'table');
     const [activeTab, setActiveTab] = useState('BLOUSE'); // 'BLOUSE' or 'CHUDHIDHAR'
+    const location = useLocation();
 
     useEffect(() => {
         if (id) {
@@ -54,6 +57,18 @@ export default function CustomerSearch({ onMenuClick }) {
     async function handleSelectById(cid) {
         setLoading(true);
         try {
+            if (location.state?.offlineData) {
+                const data = location.state.offlineData;
+                setSelected({
+                    ...data,
+                    id: cid,
+                    name: data.customer_name, // Mapping order fields back to customer profile format
+                    orders: []
+                });
+                setSearched(true);
+                return;
+            }
+
             if (String(cid).startsWith('temp-')) {
                 const offlineCust = await getOfflineCustomerById(cid);
                 setSelected(offlineCust ? { ...offlineCust, orders: [], isOfflineQueue: true } : null);
@@ -232,38 +247,40 @@ export default function CustomerSearch({ onMenuClick }) {
                         <div className="topbar-subtitle">Find or view customer profile</div>
                     </div>
                 </div>
-                <Link to="/new-order" className="btn btn-primary"><Plus size={16} /> New Order</Link>
+                {isAdmin && <Link to="/new-order" className="btn btn-primary"><Plus size={16} /> New Order</Link>}
             </div>
 
             <div className="page-container">
                 {/* Search Box */}
-                <div className="card mb-24">
-                    <div className="card-body">
-                        <form onSubmit={handleSearch}>
-                            <div className="flex gap-12">
-                                <div className="input-prefix" style={{ flex: 1 }}>
-                                    <span className="prefix-symbol"><Search size={15} /></span>
-                                    <input
-                                        type="text"
-                                        value={query}
-                                        onChange={e => {
-                                            setQuery(e.target.value);
-                                            if (selected) setSelected(null); // Clear selection when typing to show live results
-                                        }}
-                                        placeholder="Enter phone number or customer name..."
-                                        autoFocus
-                                    />
+                {isAdmin && (
+                    <div className="card mb-24">
+                        <div className="card-body">
+                            <form onSubmit={handleSearch}>
+                                <div className="flex gap-12">
+                                    <div className="input-prefix" style={{ flex: 1 }}>
+                                        <span className="prefix-symbol"><Search size={15} /></span>
+                                        <input
+                                            type="text"
+                                            value={query}
+                                            onChange={e => {
+                                                setQuery(e.target.value);
+                                                if (selected) setSelected(null); // Clear selection when typing to show live results
+                                            }}
+                                            placeholder="Enter phone number or customer name..."
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <button type="submit" className="btn btn-primary" disabled={!query || loading} style={{ display: 'none' }}>
+                                        {loading ? 'Searching…' : 'Search'}
+                                    </button>
                                 </div>
-                                <button type="submit" className="btn btn-primary" disabled={!query || loading} style={{ display: 'none' }}>
-                                    {loading ? 'Searching…' : 'Search'}
-                                </button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Results List */}
-                {searched && !selected && (
+                {isAdmin && searched && !selected && (
                     <div className="card mb-24">
                         <div className="card-header">
                             <h3 className="card-title">
@@ -284,7 +301,7 @@ export default function CustomerSearch({ onMenuClick }) {
                                     <thead>
                                         <tr>
                                             <th>Customer Name</th>
-                                            <th>Phone</th>
+                                            {isAdmin && <th>Phone</th>}
                                             <th>Member Since</th>
                                             <th>Action</th>
                                         </tr>
@@ -299,7 +316,7 @@ export default function CustomerSearch({ onMenuClick }) {
                                                         {String(c.id).startsWith('temp-') && <span style={{ marginLeft: 8, color: '#E65100', fontSize: 11, fontWeight: 'normal' }}>(Offline)</span>}
                                                     </strong>
                                                 </td>
-                                                <td><Phone size={12} style={{ marginRight: 4 }} />{c.phone_number}</td>
+                                                {isAdmin && <td><Phone size={12} style={{ marginRight: 4 }} />{c.phone_number}</td>}
                                                 <td style={{ fontSize: 12 }}>{c.created_at ? formatDate(c.created_at) : 'Pending Sync'}</td>
                                                 <td>
                                                     <button className="btn btn-sm btn-outline" onClick={e => { e.stopPropagation(); handleSelect(c); }}>
@@ -318,8 +335,11 @@ export default function CustomerSearch({ onMenuClick }) {
                 {/* Customer Profile */}
                 {selected && (
                     <div>
-                        <button className="btn btn-ghost mb-16" onClick={() => setSelected(null)}>
-                            ← Back to results
+                        <button className="btn btn-ghost mb-16" onClick={() => {
+                            if (!isAdmin) navigate('/');
+                            else setSelected(null);
+                        }}>
+                            {isAdmin ? '← Back to results' : '← Back to Dashboard'}
                         </button>
 
                         <div className="grid-2 gap-16 mb-24">
@@ -330,7 +350,7 @@ export default function CustomerSearch({ onMenuClick }) {
                                         <User size={18} color="var(--gold)" /> Customer Info
                                         {selected.isOfflineQueue && <span style={{ color: '#E65100', fontSize: 12, marginLeft: 8 }}>(Pending Sync)</span>}
                                     </h3>
-                                    {!isEditingInfo ? (
+                                    {!isEditingInfo && isAdmin ? (
                                         <div className="flex gap-8">
                                             <a href={`tel:${selected.phone_number}`} className="btn btn-sm btn-outline" style={{ color: '#2E7D32', borderColor: '#2E7D32' }} title="Call Customer">
                                                 <Phone size={13} /> Call
@@ -341,7 +361,7 @@ export default function CustomerSearch({ onMenuClick }) {
                                             </button>
                                             )}
                                         </div>
-                                    ) : (
+                                    ) : isAdmin ? (
                                         <div className="flex gap-8">
                                             <button className="btn btn-sm btn-ghost" onClick={handleCancelEditInfo} style={{ color: 'var(--maroon)' }}>
                                                 <X size={14} /> Cancel
@@ -350,7 +370,7 @@ export default function CustomerSearch({ onMenuClick }) {
                                                 <Check size={14} /> {loading ? 'Saving...' : 'Save'}
                                             </button>
                                         </div>
-                                    )}
+                                    ) : null}
                                 </div>
                                 <div className="card-body">
                                     <div style={{ marginBottom: 12 }}>
@@ -380,9 +400,11 @@ export default function CustomerSearch({ onMenuClick }) {
                                                 <div style={{ fontSize: 22, fontFamily: 'var(--font-serif)', fontWeight: 600, color: 'var(--maroon-dark)' }}>
                                                     {selected.name}
                                                 </div>
-                                                <div className="flex gap-8 mt-4" style={{ color: 'var(--gray)', fontSize: 13 }}>
-                                                    <Phone size={14} /> {selected.phone_number}
-                                                </div>
+                                                {isAdmin && (
+                                                    <div className="flex gap-8 mt-4" style={{ color: 'var(--gray)', fontSize: 13 }}>
+                                                        <Phone size={14} /> {selected.phone_number}
+                                                    </div>
+                                                )}
                                                 <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 6 }}>
                                                     Customer since {formatDate(selected.created_at)}
                                                 </div>
@@ -396,13 +418,13 @@ export default function CustomerSearch({ onMenuClick }) {
                             <div className="card">
                                 <div className="card-header">
                                     <h3 className="card-title flex gap-8"><Ruler size={18} color="var(--gold)" /> Measurements</h3>
-                                    {!isEditing ? (
+                                    {!isEditing && isAdmin ? (
                                         !selected.isOfflineQueue && (
                                         <button className="btn btn-sm btn-outline" onClick={handleStartEdit} title="Edit Measurements">
                                             <Edit2 size={13} /> Edit
                                         </button>
                                         )
-                                    ) : (
+                                    ) : isAdmin ? (
                                         <div className="flex gap-8">
                                             <button className="btn btn-sm btn-ghost" onClick={handleCancelEdit} style={{ color: 'var(--maroon)' }}>
                                                 <X size={14} /> Cancel
@@ -411,7 +433,7 @@ export default function CustomerSearch({ onMenuClick }) {
                                                 <Check size={14} /> {loading ? 'Saving...' : 'Save'}
                                             </button>
                                         </div>
-                                    )}
+                                    ) : null}
                                 </div>
                                 <div className="card-body">
                                     {/* Tabs */}
@@ -462,8 +484,9 @@ export default function CustomerSearch({ onMenuClick }) {
                         </div>
 
                         {/* Order history */}
-                        <div className="card">
-                            <div className="card-header">
+                        {isAdmin && (
+                            <div className="card">
+                                <div className="card-header">
                                 <h3 className="card-title flex gap-8"><ShoppingBag size={18} color="var(--gold)" /> Order History</h3>
                                 <div className="flex gap-16">
                                     <div className="flex gap-4 p-4" style={{ background: 'var(--gray-light)', borderRadius: 8 }}>
@@ -565,8 +588,8 @@ export default function CustomerSearch({ onMenuClick }) {
                                     )}
                                 </div>
                             )}
-
                         </div>
+                        )}
                     </div>
                 )}
             </div>
