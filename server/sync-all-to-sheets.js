@@ -68,7 +68,7 @@ async function run() {
 
         // Fetch measurements
         const measRs = await db.execute({
-            sql: 'SELECT * FROM measurements WHERE customer_id = ?',
+            sql: 'SELECT *, length AS m_length FROM measurements WHERE customer_id = ?',
             args: [order.customer_id]
         });
         order.measurements = measRs.rows[0] || {};

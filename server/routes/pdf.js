@@ -130,13 +130,15 @@ router.get('/:orderId', async (req, res) => {
         });
 
         // Footer
-        const fY = doc.page.height - 45;
-        doc.rect(0, fY, pageWidth, 45).fill(DARK);
+        const fY = doc.page.height - 58;
+        doc.rect(0, fY, pageWidth, 58).fill(DARK);
         doc.rect(0, fY, pageWidth, 2).fill(GOLD);
+        doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#C6A75E')
+            .text('Note: We are not responsible for clothes left over 3 months.', margin, fY + 8, { align: 'center', width: contentW });
         doc.font('Helvetica').fontSize(7).fillColor('#9A9090')
-            .text('Thank you for choosing LM Ladies Tailor!', margin, fY + 8, { align: 'center', width: contentW });
+            .text('Thank you for choosing LM Ladies Tailor!', margin, fY + 22, { align: 'center', width: contentW });
         doc.fontSize(6.5).fillColor('#6A6060')
-            .text('Computer-generated bill. No signature required.', margin, fY + 22, { align: 'center', width: contentW });
+            .text('Computer-generated bill. No signature required.', margin, fY + 34, { align: 'center', width: contentW });
 
         doc.end();
     } catch (err) {

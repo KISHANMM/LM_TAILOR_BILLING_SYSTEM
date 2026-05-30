@@ -61,6 +61,7 @@ router.post('/', async (req, res) => {
         if (measurements && Object.keys(measurements).length > 0) {
             try {
                 const m = measurements;
+                const extra = m.extra_measurements ? (typeof m.extra_measurements === 'string' ? m.extra_measurements : JSON.stringify(m.extra_measurements)) : null;
                 const mArgs = [
                     parseFloat(m.length || m.m_length) || null, parseFloat(m.shoulder) || null, parseFloat(m.chest) || null,
                     parseFloat(m.waist) || null, parseFloat(m.dot) || null, parseFloat(m.back_neck) || null,
@@ -84,19 +85,20 @@ router.post('/', async (req, res) => {
                               length=?, shoulder=?, chest=?, waist=?, dot=?, back_neck=?, front_neck=?, sleeves_length=?, armhole=?, chest_distance=?, sleeves_round=?,
                               t_length=?, t_shoulder=?, t_chest=?, t_waist=?, t_back_neck=?, t_front_neck=?, t_sleeves_length=?, t_sleeves_round=?, t_half_body=?, t_hip=?,
                               b_length=?, b_bottom_round=?, b_hip=?, b_fly=?, b_thai=?, b_knee=?,
+                              extra_measurements=?,
                               updated_at=datetime('now','localtime')
                               WHERE customer_id=?`,
-                        args: [...mArgs, cid]
+                        args: [...mArgs, extra, cid]
                     });
                 } else {
                     await db.execute({
                         sql: `INSERT INTO measurements (
                                 customer_id, length, shoulder, chest, waist, dot, back_neck, front_neck, sleeves_length, armhole, chest_distance, sleeves_round,
                                 t_length, t_shoulder, t_chest, t_waist, t_back_neck, t_front_neck, t_sleeves_length, t_sleeves_round, t_half_body, t_hip,
-                                b_length, b_bottom_round, b_hip, b_fly, b_thai, b_knee
+                                b_length, b_bottom_round, b_hip, b_fly, b_thai, b_knee, extra_measurements
                               )
-                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-                        args: [cid, ...mArgs]
+                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                        args: [cid, ...mArgs, extra]
                     });
                 }
             } catch (measErr) {
@@ -151,7 +153,7 @@ router.post('/', async (req, res) => {
             setImmediate(async () => {
                 try {
                 const measRs = await db.execute({
-                    sql: 'SELECT * FROM measurements WHERE customer_id = ?',
+                    sql: 'SELECT *, length AS m_length FROM measurements WHERE customer_id = ?',
                     args: [cid]
                 });
                 const meas = measRs.rows[0] || {};
@@ -210,7 +212,7 @@ router.get('/', async (req, res) => {
                m.length as m_length, m.shoulder, m.chest, m.waist, m.dot, m.back_neck, 
                m.front_neck, m.sleeves_length, m.armhole, m.chest_distance, m.sleeves_round,
                m.t_length, m.t_shoulder, m.t_chest, m.t_waist, m.t_back_neck, m.t_front_neck, m.t_sleeves_length, m.t_sleeves_round, m.t_half_body, m.t_hip,
-               m.b_length, m.b_bottom_round, m.b_hip, m.b_fly, m.b_thai, m.b_knee
+               m.b_length, m.b_bottom_round, m.b_hip, m.b_fly, m.b_thai, m.b_knee, m.extra_measurements
         FROM orders o 
         JOIN customers c ON c.id = o.customer_id 
         LEFT JOIN measurements m ON m.customer_id = c.id
@@ -265,10 +267,10 @@ router.put('/:id/status', async (req, res) => {
         if (!['Pending', 'Ready', 'Delivered'].includes(status))
             return res.status(400).json({ error: 'Invalid status' });
 
-        let sql = 'UPDATE orders SET status = ? WHERE order_id = ?';
+        let sql = 'UPDATE orders SET status = ?, delivered_at = NULL WHERE order_id = ?';
         if (status === 'Delivered') {
-            // Auto-settle bill when marked delivered
-            sql = 'UPDATE orders SET status = ?, advance_paid = total_amount, balance_amount = 0 WHERE order_id = ?';
+            // Auto-settle bill when marked delivered and set delivered_at
+            sql = 'UPDATE orders SET status = ?, advance_paid = total_amount, balance_amount = 0, delivered_at = COALESCE(delivered_at, datetime(\'now\', \'localtime\')) WHERE order_id = ?';
         }
 
         await db.execute({
@@ -350,8 +352,15 @@ router.put('/:id', async (req, res) => {
             finalStatus = 'Delivered';
         }
 
+        let deliveredAtSql = '';
+        if (finalStatus === 'Delivered') {
+            deliveredAtSql = `, delivered_at = COALESCE(delivered_at, datetime('now', 'localtime'))`;
+        } else {
+            deliveredAtSql = `, delivered_at = NULL`;
+        }
+
         await db.execute({
-            sql: `UPDATE orders SET booking_date=?,delivery_date=?,advance_paid=?,total_amount=?,balance_amount=?,notes=?,measurement_type=?,status=?,assigned_worker=?,stitching_expense=?,payment_method=?
+            sql: `UPDATE orders SET booking_date=?,delivery_date=?,advance_paid=?,total_amount=?,balance_amount=?,notes=?,measurement_type=?,status=?,assigned_worker=?,stitching_expense=?,payment_method=? ${deliveredAtSql}
                 WHERE order_id=?`,
             args: [
                 booking_date || order.booking_date,

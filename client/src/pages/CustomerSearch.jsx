@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu, LayoutGrid, List } from 'lucide-react';
+import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu, LayoutGrid, List, Trash2 } from 'lucide-react';
 import api from '../api/axios';
 import { searchOfflineCustomers, getOfflineCustomerById } from '../utils/offlineStore';
 
@@ -42,6 +42,7 @@ export default function CustomerSearch({ onMenuClick, auth }) {
     const [searched, setSearched] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editForm, setEditForm] = useState({});
+    const [editExtraForm, setEditExtraForm] = useState([]);
     const [isEditingInfo, setIsEditingInfo] = useState(false);
     const [editInfoForm, setEditInfoForm] = useState({});
     const [viewMode, setViewMode] = useState(window.innerWidth < 768 ? 'cards' : 'table');
@@ -56,6 +57,7 @@ export default function CustomerSearch({ onMenuClick, auth }) {
 
     async function handleSelectById(cid) {
         setLoading(true);
+        setActiveTab('BLOUSE');
         try {
             if (location.state?.offlineData) {
                 const data = location.state.offlineData;
@@ -159,6 +161,7 @@ export default function CustomerSearch({ onMenuClick, auth }) {
 
     async function handleSelect(customer) {
         setIsEditing(false); // Reset editing mode when selecting a new customer
+        setActiveTab('BLOUSE');
         try {
             if (String(customer.id).startsWith('temp-')) {
                 const offlineCust = await getOfflineCustomerById(customer.id);
@@ -181,28 +184,67 @@ export default function CustomerSearch({ onMenuClick, auth }) {
             form[k] = selected[k] !== null && selected[k] !== undefined ? selected[k] : '';
         });
         setEditForm(form);
+
+        const extra = selected.extra_measurements 
+            ? (typeof selected.extra_measurements === 'string' ? JSON.parse(selected.extra_measurements) : selected.extra_measurements)
+            : [];
+        setEditExtraForm(JSON.parse(JSON.stringify(extra)));
+
         setIsEditing(true);
     }
 
     function handleCancelEdit() {
         setIsEditing(false);
         setEditForm({});
+        setEditExtraForm([]);
     }
 
     async function handleSaveEdit() {
         setLoading(true);
         try {
-            await api.put(`/customers/${selected.id}/measurements`, editForm);
+            await api.put(`/customers/${selected.id}/measurements`, {
+                ...editForm,
+                extra_measurements: editExtraForm
+            });
             // Refresh selected customer data to see changes
             const res = await api.get(`/customers/${selected.id}`);
             setSelected(res.data);
             setIsEditing(false);
             setEditForm({});
+            setEditExtraForm([]);
         } catch (err) {
             console.error('Failed to save measurements:', err);
         } finally {
             setLoading(false);
         }
+    }
+
+    const initialExtraMeasurement = (type = 'BLOUSE') => ({
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+        name: '',
+        type,
+        values: {
+            m_length: '', shoulder: '', chest: '', waist: '', dot: '',
+            back_neck: '', front_neck: '', sleeves_length: '', armhole: '',
+            chest_distance: '', sleeves_round: '',
+            t_length: '', t_shoulder: '', t_chest: '', t_waist: '', t_back_neck: '', t_front_neck: '', t_sleeves_length: '', t_sleeves_round: '', t_half_body: '', t_hip: '',
+            b_length: '', b_bottom_round: '', b_hip: '', b_fly: '', b_thai: '', b_knee: '',
+        }
+    });
+
+    function addEditExtra(type) {
+        const newObj = initialExtraMeasurement(type);
+        setEditExtraForm(prev => [...prev, newObj]);
+        return newObj.id;
+    }
+    function removeEditExtra(id) {
+        setEditExtraForm(prev => prev.filter(m => m.id !== id));
+    }
+    function updateEditExtra(id, field, val) {
+        setEditExtraForm(prev => prev.map(m => m.id === id ? { ...m, [field]: val } : m));
+    }
+    function updateEditExtraValue(id, key, val) {
+        setEditExtraForm(prev => prev.map(m => m.id === id ? { ...m, values: { ...m.values, [key]: val } } : m));
     }
 
     function handleStartEditInfo() {
@@ -336,10 +378,15 @@ export default function CustomerSearch({ onMenuClick, auth }) {
                 {selected && (
                     <div>
                         <button className="btn btn-ghost mb-16" onClick={() => {
-                            if (!isAdmin) navigate('/');
-                            else setSelected(null);
+                            if (location.state?.from) {
+                                navigate(location.state.from);
+                            } else if (!isAdmin) {
+                                navigate('/');
+                            } else {
+                                setSelected(null);
+                            }
                         }}>
-                            {isAdmin ? '← Back to results' : '← Back to Dashboard'}
+                            {location.state?.from ? '← Back' : isAdmin ? '← Back to results' : '← Back to Dashboard'}
                         </button>
 
                         <div className="grid-2 gap-16 mb-24">
@@ -437,45 +484,183 @@ export default function CustomerSearch({ onMenuClick, auth }) {
                                 </div>
                                 <div className="card-body">
                                     {/* Tabs */}
-                                    <div style={{ display: 'flex', gap: 8, marginBottom: 16, borderBottom: '1px solid var(--gray-light)', paddingBottom: 16, overflowX: 'auto', whiteSpace: 'nowrap' }}>
-                                        <button className={`btn btn-sm ${activeTab === 'BLOUSE' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('BLOUSE')} style={{ fontSize: 11 }}>BLOUSE</button>
-                                        <button className={`btn btn-sm ${activeTab === 'CHUDHIDHAR' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('CHUDHIDHAR')} style={{ fontSize: 11 }}>CHUDHIDHAR</button>
-                                    </div>
-
                                     {(() => {
-                                        const labels = activeTab === 'BLOUSE' ? BLOUSE_LABELS : CHUDHIDHAR_LABELS;
-                                        const hasData = Object.keys(labels).some(k => selected[k] != null && selected[k] !== '');
+                                        const parsedExtra = selected?.extra_measurements 
+                                            ? (typeof selected.extra_measurements === 'string' ? JSON.parse(selected.extra_measurements) : selected.extra_measurements)
+                                            : [];
+                                        const activeExtraList = isEditing ? editExtraForm : parsedExtra;
+
+                                        const tabs = [
+                                            { id: 'BLOUSE', label: 'BLOUSE' },
+                                            ...activeExtraList.filter(e => e.type === 'BLOUSE').map((e, idx) => ({
+                                                id: `extra-${e.id}`,
+                                                label: e.name || `Blouse ${idx + 2}`
+                                            })),
+                                            { id: 'CHUDHIDHAR', label: 'CHUDHIDHAR' },
+                                            ...activeExtraList.filter(e => e.type === 'CHUDHIDHAR').map((e, idx) => ({
+                                                id: `extra-${e.id}`,
+                                                label: e.name || `Chudhidhar ${idx + 2}`
+                                            }))
+                                        ];
+
+                                        return (
+                                            <div style={{ display: 'flex', gap: 8, marginBottom: 16, borderBottom: '1px solid var(--gray-light)', paddingBottom: 16, overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                                                {tabs.map(t => (
+                                                    <button
+                                                        key={t.id}
+                                                        className={`btn btn-sm ${activeTab === t.id ? 'btn-primary' : 'btn-ghost'}`}
+                                                        onClick={() => setActiveTab(t.id)}
+                                                        style={{ fontSize: 11 }}
+                                                    >
+                                                        {t.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Tab Content rendering */}
+                                    {(() => {
+                                        const parsedExtra = selected?.extra_measurements 
+                                            ? (typeof selected.extra_measurements === 'string' ? JSON.parse(selected.extra_measurements) : selected.extra_measurements)
+                                            : [];
+
+                                        let labels, values, isExtra = false, extraId = null, extraType = null;
+                                        
+                                        if (activeTab === 'BLOUSE') {
+                                            labels = BLOUSE_LABELS;
+                                            values = selected;
+                                        } else if (activeTab === 'CHUDHIDHAR') {
+                                            labels = CHUDHIDHAR_LABELS;
+                                            values = selected;
+                                        } else if (activeTab.startsWith('extra-')) {
+                                            isExtra = true;
+                                            extraId = activeTab.replace('extra-', '');
+                                            const source = isEditing ? editExtraForm : parsedExtra;
+                                            const extraProfile = source.find(e => String(e.id) === String(extraId));
+                                            if (!extraProfile) {
+                                                return <div className="empty-state" style={{ padding: '16px 0', fontSize: 13 }}>Profile not found</div>;
+                                            }
+                                            extraType = extraProfile.type;
+                                            labels = extraType === 'BLOUSE' ? BLOUSE_LABELS : CHUDHIDHAR_LABELS;
+                                            values = extraProfile.values || {};
+                                        }
+
+                                        const hasData = isExtra || Object.keys(labels).some(k => values[k] != null && values[k] !== '');
                                         
                                         if (!isEditing && !hasData) {
                                             return <div className="empty-state" style={{ padding: '16px 0', fontSize: 13 }}>No {activeTab.toLowerCase()} measurements recorded</div>;
                                         }
 
                                         return (
-                                            <div className="grid-2" style={{ gap: 10 }}>
-                                                {Object.entries(labels).map(([key, label]) => (
-                                                    <div key={key} className="flex-between" style={{ padding: '4px 8px', background: 'var(--ivory)', borderRadius: 6 }}>
-                                                        <span style={{ fontSize: 12, color: 'var(--gray)' }}>{label}</span>
+                                            <div>
+                                                {/* If extra profile is active, show name header or name input */}
+                                                {isExtra && (
+                                                    <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
                                                         {isEditing ? (
-                                                            <input
-                                                                type="number"
-                                                                step="0.1"
-                                                                value={editForm[key] || ''}
-                                                                onChange={e => setEditForm({ ...editForm, [key]: e.target.value })}
-                                                                style={{
-                                                                    width: 70,
-                                                                    height: 24,
-                                                                    fontSize: 13,
-                                                                    border: '1px solid var(--gold-pale)',
-                                                                    borderRadius: 4,
-                                                                    padding: '0 4px',
-                                                                    background: 'white'
-                                                                }}
-                                                            />
+                                                            <div className="flex gap-8" style={{ width: '100%' }}>
+                                                                <input
+                                                                    className="form-input"
+                                                                    value={editExtraForm.find(e => String(e.id) === String(extraId))?.name || ''}
+                                                                    onChange={e => updateEditExtra(extraId, 'name', e.target.value)}
+                                                                    placeholder="Garment Profile Name (e.g. Blouse 2)"
+                                                                    required
+                                                                    style={{ height: 32, fontSize: 13, flex: 1 }}
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-sm btn-ghost"
+                                                                    onClick={() => {
+                                                                        removeEditExtra(extraId);
+                                                                        setActiveTab(extraType === 'BLOUSE' ? 'BLOUSE' : 'CHUDHIDHAR');
+                                                                    }}
+                                                                    style={{ color: 'var(--maroon)', padding: '0 8px' }}
+                                                                    title="Delete this profile"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
                                                         ) : (
-                                                            <strong style={{ fontSize: 13 }}>{selected[key] != null && selected[key] !== '' ? `${selected[key]}"` : '-'}</strong>
+                                                            <h4 style={{ margin: 0, fontFamily: 'var(--font-serif)', color: 'var(--maroon-dark)', fontSize: 15, fontWeight: 600 }}>
+                                                                {parsedExtra.find(e => String(e.id) === String(extraId))?.name || `Extra ${extraType.toLowerCase()}`}
+                                                            </h4>
                                                         )}
                                                     </div>
-                                                ))}
+                                                )}
+
+                                                {/* Measurements Grid */}
+                                                <div className="grid-2" style={{ gap: 10 }}>
+                                                    {Object.entries(labels).map(([key, label]) => (
+                                                        <div key={key} className="flex-between" style={{ padding: '4px 8px', background: 'var(--ivory)', borderRadius: 6 }}>
+                                                            <span style={{ fontSize: 12, color: 'var(--gray)' }}>{label}</span>
+                                                            {isEditing ? (
+                                                                isExtra ? (
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.1"
+                                                                        value={editExtraForm.find(e => String(e.id) === String(extraId))?.values[key] || ''}
+                                                                        onChange={e => updateEditExtraValue(extraId, key, e.target.value)}
+                                                                        style={{
+                                                                            width: 70,
+                                                                            height: 24,
+                                                                            fontSize: 13,
+                                                                            border: '1px solid var(--gold-pale)',
+                                                                            borderRadius: 4,
+                                                                            padding: '0 4px',
+                                                                            background: 'white'
+                                                                        }}
+                                                                    />
+                                                                ) : (
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.1"
+                                                                        value={editForm[key] || ''}
+                                                                        onChange={e => setEditForm({ ...editForm, [key]: e.target.value })}
+                                                                        style={{
+                                                                            width: 70,
+                                                                            height: 24,
+                                                                            fontSize: 13,
+                                                                            border: '1px solid var(--gold-pale)',
+                                                                            borderRadius: 4,
+                                                                            padding: '0 4px',
+                                                                            background: 'white'
+                                                                        }}
+                                                                    />
+                                                                )
+                                                            ) : (
+                                                                <strong style={{ fontSize: 13 }}>{values[key] != null && values[key] !== '' ? `${values[key]}"` : '-'}</strong>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {/* Quick Actions to Add Extra Profiles when editing */}
+                                                {isEditing && (
+                                                    <div style={{ marginTop: 20, paddingTop: 16, borderTop: '2px dashed var(--gray-light)', display: 'flex', gap: 12 }}>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline"
+                                                            onClick={() => {
+                                                                const newId = addEditExtra('BLOUSE');
+                                                                setActiveTab(`extra-${newId}`);
+                                                            }}
+                                                            style={{ flex: 1, justifyContent: 'center', gap: 6, fontSize: 11 }}
+                                                        >
+                                                            <Plus size={12} /> Add Blouse Profile
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-outline"
+                                                            onClick={() => {
+                                                                const newId = addEditExtra('CHUDHIDHAR');
+                                                                setActiveTab(`extra-${newId}`);
+                                                            }}
+                                                            style={{ flex: 1, justifyContent: 'center', gap: 6, fontSize: 11 }}
+                                                        >
+                                                            <Plus size={12} /> Add Chudhidhar Profile
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })()}

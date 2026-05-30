@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Scissors, Lock, User, LogIn } from 'lucide-react';
+import { Scissors, Lock, User, LogIn, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Login({ setAuth }) {
     const navigate = useNavigate();
     const [role, setRole] = useState('Admin'); // 'Admin' or 'Worker'
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleLogin = (e) => {
         e.preventDefault();
@@ -67,17 +68,34 @@ export default function Login({ setAuth }) {
                         {role === 'Admin' ? (
                             <div className="form-group mb-24">
                                 <label className="form-label">Admin Password</label>
-                                <div className="input-prefix">
+                                <div className="input-prefix" style={{ display: 'flex', alignItems: 'center' }}>
                                     <span className="prefix-symbol"><Lock size={16} /></span>
                                     <input
-                                        type="password"
+                                        type={showPassword ? "text" : "password"}
                                         className="form-input"
                                         placeholder="Enter password"
                                         value={password}
                                         onChange={e => setPassword(e.target.value)}
                                         required
-                                        style={{ border: 'none', background: 'transparent' }}
+                                        style={{ border: 'none', background: 'transparent', flex: 1 }}
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            color: 'var(--gray)',
+                                            paddingRight: '12px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                        title={showPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
                                 </div>
                             </div>
                         ) : (

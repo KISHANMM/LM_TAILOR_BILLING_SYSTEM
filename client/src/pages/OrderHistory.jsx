@@ -25,7 +25,7 @@ export default function OrderHistory({ onMenuClick }) {
     const [statusFilter, setStatusFilter] = useState(STATUS_OPTIONS.includes(initStatus) ? initStatus : 'All');
     const [dateFilter, setDateFilter] = useState('');
     const [updatingId, setUpdatingId] = useState(null);
-    const [viewMode, setViewMode] = useState('table');
+    const [viewMode, setViewMode] = useState(window.innerWidth <= 768 ? 'cards' : 'table');
     const [editingAdvanceId, setEditingAdvanceId] = useState(null);
     const [tempAdvanceValue, setTempAdvanceValue] = useState('');
 
@@ -413,7 +413,7 @@ export default function OrderHistory({ onMenuClick }) {
                                                         )}
                                                     </td>
                                                     <td>
-                                                        <Link to={`/customer/${o.customer_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                                                        <Link to={`/customer/${o.customer_id}`} state={{ from: location.pathname + location.search }} style={{ color: 'inherit', textDecoration: 'none' }}>
                                                             <div style={{ fontWeight: 600 }}>{o.customer_name}</div>
                                                         </Link>
                                                     </td>
@@ -588,7 +588,7 @@ export default function OrderHistory({ onMenuClick }) {
                                                 </div>
                                             </div>
                                             <div className="order-card-actions">
-                                                <Link to={`/customer/${o.customer_id}`} className="btn btn-sm btn-outline">
+                                                <Link to={`/customer/${o.customer_id}`} state={{ from: location.pathname + location.search }} className="btn btn-sm btn-outline">
                                                     <User size={14} /> Measurements
                                                 </Link>
                                                 <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">

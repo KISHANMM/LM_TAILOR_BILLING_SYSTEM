@@ -154,6 +154,30 @@ function _prepareRow(data) {
         ? services.map(s => `${s.service_type} x${s.quantity} (₹${s.price})`).join(', ')
         : '';
 
+    // Format extra measurements if present
+    let extraNotes = '';
+    if (measurements.extra_measurements) {
+        try {
+            const parsed = typeof measurements.extra_measurements === 'string'
+                ? JSON.parse(measurements.extra_measurements)
+                : measurements.extra_measurements;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const summaries = parsed.map(item => {
+                    const vals = [];
+                    Object.entries(item.values || {}).forEach(([k, v]) => {
+                        if (v !== null && v !== undefined && v !== '') {
+                            vals.push(`${k}: ${v}`);
+                        }
+                    });
+                    return `[${item.name || item.type}]: ${vals.join(', ')}`;
+                });
+                extraNotes = `\nExtra Profiles: ${summaries.join(' | ')}`;
+            }
+        } catch (e) {}
+    }
+
+    const combinedNotes = notes ? (notes + extraNotes) : extraNotes.trim();
+
     return [
         `#${String(order_id).padStart(4, '0')}`,
         customer_name || '',
@@ -167,7 +191,7 @@ function _prepareRow(data) {
         payment_method || 'Cash',
         assigned_worker || '',
         measurement_type || '',
-        measurements['length'] || measurements.m_length || '',
+        measurements.m_length || measurements.meas_length || '',
         measurements.shoulder || '',
         measurements.chest || '',
         measurements.waist || '',
@@ -194,9 +218,9 @@ function _prepareRow(data) {
         measurements.b_fly || '',
         measurements.b_thai || '',
         measurements.b_knee || '',
-        notes || '',
+        combinedNotes || '',
         created_at || new Date().toLocaleString('en-IN'),
-        measurements.meas_length || measurements.length || measurements.m_length || ''
+        measurements.meas_length || measurements.m_length || ''
     ];
 }
 

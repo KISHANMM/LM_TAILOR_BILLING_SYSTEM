@@ -18,3 +18,13 @@ project_context.md
 *.csv
 *backup*.json
 *backup*.xml
+*.xlsx
+~$*.xlsx
+
+# Local Documentation & Resumes
+future_features.txt
+interview_questions.md
+about_project.md
+update_new.txt
+*resume*
+server/export-cloud-backup.js

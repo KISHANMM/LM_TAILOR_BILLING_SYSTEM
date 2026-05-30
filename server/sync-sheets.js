@@ -75,7 +75,7 @@ async function sync() {
 
                 // Fetch measurements
                 const measRs = await db.execute({
-                    sql: 'SELECT * FROM measurements WHERE customer_id = ?',
+                    sql: 'SELECT *, length AS m_length FROM measurements WHERE customer_id = ?',
                     args: [order.customer_id]
                 });
                 const m = measRs.rows[0] || {};
@@ -93,7 +93,7 @@ async function sync() {
                     order.payment_method || 'Cash',
                     order.assigned_worker || '',
                     order.measurement_type || '',
-                    m.length || m.m_length || '',
+                    m.m_length || m.meas_length || '',
                     m.shoulder || '',
                     m.chest || '',
                     m.waist || '',

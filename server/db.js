@@ -30,6 +30,7 @@ async function initDB() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER NOT NULL,
         meas_length REAL,
+        length REAL,
         shoulder REAL,
         chest REAL,
         waist REAL,
@@ -40,6 +41,7 @@ async function initDB() {
         armhole REAL,
         chest_distance REAL,
         sleeves_round REAL,
+        extra_measurements TEXT,
         updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
       )`,
@@ -54,6 +56,7 @@ async function initDB() {
         status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN ('Pending', 'Ready', 'Delivered')),
         measurement_type TEXT NOT NULL DEFAULT 'Body',
         notes TEXT,
+        delivered_at TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
       )`,
@@ -115,6 +118,10 @@ async function initDB() {
       await db.execute('ALTER TABLE measurements ADD COLUMN meas_length REAL');
       console.log('✅ Added meas_length column to measurements table');
     } catch (e) { }
+    try {
+      await db.execute('ALTER TABLE measurements ADD COLUMN length REAL');
+      console.log('✅ Added length column to measurements table');
+    } catch (e) { }
 
     // Add measurement_type to existing orders table if it doesn't exist
     try {
@@ -155,6 +162,21 @@ async function initDB() {
       await db.execute('ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT "Cash"');
       console.log('✅ Added payment_method column to orders table');
     } catch (e) { }
+
+    // Add delivered_at column and backfill logic
+    try {
+      await db.execute('ALTER TABLE orders ADD COLUMN delivered_at TEXT');
+      console.log('✅ Added delivered_at column to orders table');
+    } catch (e) { }
+
+    try {
+      await db.execute(`
+        UPDATE orders 
+        SET delivered_at = COALESCE(delivered_at, delivery_date || ' 12:00:00')
+        WHERE status = 'Delivered' AND delivered_at IS NULL
+      `);
+      console.log('✅ Backfilled delivered_at for legacy delivered orders');
+    } catch (e) { }
     
     // TOP Measurements
     const topFields = ['t_length', 't_shoulder', 't_chest', 't_waist', 't_back_neck', 't_front_neck', 't_sleeves_length', 't_sleeves_round', 't_half_body', 't_hip'];
@@ -167,6 +189,12 @@ async function initDB() {
     for (const f of bottomFields) {
       try { await db.execute(`ALTER TABLE measurements ADD COLUMN ${f} REAL`); console.log(`✅ Added ${f} to measurements`); } catch (e) { }
     }
+
+    // Add extra_measurements column to measurements table
+    try {
+      await db.execute('ALTER TABLE measurements ADD COLUMN extra_measurements TEXT');
+      console.log('✅ Added extra_measurements column to measurements table');
+    } catch (e) { }
 
     // Ensure measurements has a unique constraint on customer_id (required for ON CONFLICT upsert)
     try {
@@ -186,8 +214,59 @@ async function initDB() {
     } catch (e) { console.log('ℹ️ Measurement unique index skipped:', e.message); }
 
     console.log('✅ Database Initialized (' + (isLocal ? 'Local' : 'Cloud') + ')');
+
+    // Run storage cleanup for delivered bills older than 30 days
+    setTimeout(() => {
+      runStorageCleanup();
+    }, 5000); // Run 5 seconds after startup
+
+    // Set periodic execution (every 24 hours)
+    setInterval(() => {
+      runStorageCleanup();
+    }, 24 * 60 * 60 * 1000);
+
   } catch (err) {
     console.error('❌ Database Initialization Error Details:', err);
+  }
+}
+
+async function runStorageCleanup() {
+  try {
+    console.log('🧹 Running storage cleanup for Delivered bills older than 60 days...');
+    
+    // 1. Find all orders that have been delivered for more than 60 days
+    const rs = await db.execute(`
+      SELECT order_id FROM orders 
+      WHERE status = 'Delivered' 
+      AND delivered_at IS NOT NULL 
+      AND delivered_at <= datetime('now', '-60 days', 'localtime')
+    `);
+    
+    if (rs.rows.length === 0) {
+      console.log('✅ No old delivered bills found for storage cleanup.');
+      return;
+    }
+    
+    const orderIds = rs.rows.map(row => Number(row.order_id));
+    console.log(`🔍 Found ${orderIds.length} order(s) delivered > 60 days ago. Cleaning up images and voice notes...`);
+    
+    // 2. Delete images and voice notes for these orders
+    for (const orderId of orderIds) {
+      await db.batch([
+        {
+          sql: 'DELETE FROM order_images WHERE order_id = ?',
+          args: [orderId]
+        },
+        {
+          sql: 'DELETE FROM order_voice_notes WHERE order_id = ?',
+          args: [orderId]
+        }
+      ], "write");
+    }
+    
+    console.log(`✅ Successfully cleaned up storage for ${orderIds.length} old delivered order(s).`);
+  } catch (err) {
+    console.error('❌ Error during storage cleanup:', err);
   }
 }
 

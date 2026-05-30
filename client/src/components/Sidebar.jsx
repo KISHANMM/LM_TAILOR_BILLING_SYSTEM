@@ -132,7 +132,7 @@ export default function Sidebar({ isOpen, onClose, auth, setAuth }) {
             {/* Footer */}
             <div className="sidebar-footer">
                 <Scissors size={11} style={{ display: 'inline', marginRight: 5, opacity: 0.6 }} />
-                Billing System&nbsp;·&nbsp;v1.1&nbsp;·&nbsp;2026
+                Billing System&nbsp;·&nbsp;v1.2&nbsp;·&nbsp;2026
             </div>
         </aside>
     );

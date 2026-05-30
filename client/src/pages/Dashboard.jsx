@@ -175,75 +175,135 @@ export default function Dashboard({ onMenuClick }) {
                                                 activeTab === 'overdue' ? 'overdue orders' : 'orders ready for pickup'}
                                 </div>
                             ) : (
-                                <div
-                                    className="table-container"
-                                    style={{
-                                        borderRadius: 0,
-                                        border: 'none',
-                                        maxHeight: 360,
-                                        overflowY: 'auto',
-                                    }}
-                                >
-                                    <table>
-                                        <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                                            <tr>
-                                                <th>Customer</th><th>Phone</th><th>Delivery</th><th>Status</th><th>Bill</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(() => {
-                                                const list = activeTab === 'dueToday' ? data.dueTodayOrders :
-                                                        activeTab === 'dueTomorrow' ? data.dueTomorrowOrders :
-                                                        activeTab === 'pending' ? data.pendingOrders : 
-                                                        activeTab === 'overdue' ? data.overdueOrders : data.readyOrders;
-                                                const limitedList = (list || []).slice(0, 5);
-                                                const hasMore = (list || []).length > 5;
-                                                const tabMap = { dueToday: 'Pending', dueTomorrow: 'Pending', pending: 'Pending', overdue: 'Overdue', ready: 'Ready' };
-                                                const targetStatus = tabMap[activeTab];
+                                <>
+                                    <div
+                                        className="table-container hide-on-mobile"
+                                        style={{
+                                            borderRadius: 0,
+                                            border: 'none',
+                                            maxHeight: 360,
+                                            overflowY: 'auto',
+                                        }}
+                                    >
+                                        <table>
+                                            <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                                                <tr>
+                                                    <th>Customer</th><th>Phone</th><th>Delivery</th><th>Status</th><th>Bill</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(() => {
+                                                    const list = activeTab === 'dueToday' ? data.dueTodayOrders :
+                                                            activeTab === 'dueTomorrow' ? data.dueTomorrowOrders :
+                                                            activeTab === 'pending' ? data.pendingOrders : 
+                                                            activeTab === 'overdue' ? data.overdueOrders : data.readyOrders;
+                                                    const limitedList = (list || []).slice(0, 5);
+                                                    const hasMore = (list || []).length > 5;
+                                                    const tabMap = { dueToday: 'Pending', dueTomorrow: 'Pending', pending: 'Pending', overdue: 'Overdue', ready: 'Ready' };
+                                                    const targetStatus = tabMap[activeTab];
 
-                                                return (
-                                                    <>
-                                                        {limitedList.map(o => (
-                                                            <tr key={o.order_id}>
-                                                                <td>
-                                                                    <Link to={`/customer/${o.customer_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                                                    return (
+                                                        <>
+                                                            {limitedList.map(o => (
+                                                                <tr key={o.order_id}>
+                                                                    <td>
+                                                                        <Link to={`/customer/${o.customer_id}`} state={{ from: '/' }} style={{ color: 'inherit', textDecoration: 'none' }}>
+                                                                            <strong>{o.customer_name}</strong>
+                                                                        </Link>
+                                                                    </td>
+                                                                    <td style={{ fontSize: 13 }}>{o.phone_number}</td>
+                                                                    <td style={{ fontSize: 13, color: activeTab === 'overdue' ? '#B71C1C' : 'inherit', fontWeight: activeTab === 'overdue' ? 700 : 500 }}>
+                                                                        {o.delivery_date
+                                                                            ? new Date(o.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                                                                            : '—'}
+                                                                    </td>
+                                                                    <td><StatusBadge status={o.status} /></td>
+                                                                    <td>
+                                                                        <div className="flex gap-8">
+                                                                            <Link to={`/customer/${o.customer_id}`} state={{ from: '/' }} className="btn btn-sm btn-ghost p-4" title="View Measurements">
+                                                                                <Users size={14} />
+                                                                            </Link>
+                                                                            <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
+                                                                                <Eye size={12} /> View
+                                                                            </Link>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                            {hasMore && (
+                                                                <tr>
+                                                                    <td colSpan="5" style={{ textAlign: 'center', padding: '16px' }}>
+                                                                        <Link to={`/orders?status=${targetStatus}`} className="btn btn-outline" style={{ width: '100%', justifyContent: 'center', background: 'var(--blush)' }}>
+                                                                            View More ({(list.length - 5)} more)
+                                                                        </Link>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="mobile-cards show-on-mobile" style={{ padding: '16px' }}>
+                                        {(() => {
+                                            const list = activeTab === 'dueToday' ? data.dueTodayOrders :
+                                                    activeTab === 'dueTomorrow' ? data.dueTomorrowOrders :
+                                                    activeTab === 'pending' ? data.pendingOrders : 
+                                                    activeTab === 'overdue' ? data.overdueOrders : data.readyOrders;
+                                            const limitedList = (list || []).slice(0, 5);
+                                            const hasMore = (list || []).length > 5;
+                                            const tabMap = { dueToday: 'Pending', dueTomorrow: 'Pending', pending: 'Pending', overdue: 'Overdue', ready: 'Ready' };
+                                            const targetStatus = tabMap[activeTab];
+
+                                            return (
+                                                <>
+                                                    {limitedList.map(o => (
+                                                        <div className="order-card" key={o.order_id}>
+                                                            <div className="order-card-header">
+                                                                <div className="order-card-id">
+                                                                    <Link to={`/customer/${o.customer_id}`} state={{ from: '/' }}>
                                                                         <strong>{o.customer_name}</strong>
                                                                     </Link>
-                                                                </td>
-                                                                <td style={{ fontSize: 13 }}>{o.phone_number}</td>
-                                                                <td style={{ fontSize: 13, color: activeTab === 'overdue' ? '#B71C1C' : 'inherit', fontWeight: activeTab === 'overdue' ? 700 : 500 }}>
-                                                                    {o.delivery_date
-                                                                        ? new Date(o.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                                                                        : '—'}
-                                                                </td>
-                                                                <td><StatusBadge status={o.status} /></td>
-                                                                <td>
-                                                                    <div className="flex gap-8">
-                                                                        <Link to={`/customer/${o.customer_id}`} className="btn btn-sm btn-ghost p-4" title="View Measurements">
-                                                                            <Users size={14} />
-                                                                        </Link>
-                                                                        <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
-                                                                            <Eye size={12} /> View
-                                                                        </Link>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                        {hasMore && (
-                                                            <tr>
-                                                                <td colSpan="5" style={{ textAlign: 'center', padding: '16px' }}>
-                                                                    <Link to={`/orders?status=${targetStatus}`} className="btn btn-outline" style={{ width: '100%', justifyContent: 'center', background: 'var(--blush)' }}>
-                                                                        View More ({(list.length - 5)} more)
-                                                                    </Link>
-                                                                </td>
-                                                            </tr>
-                                                        )}
-                                                    </>
-                                                );
-                                            })()}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                                </div>
+                                                                <StatusBadge status={o.status} />
+                                                            </div>
+                                                            <div className="order-card-body">
+                                                                <div className="order-card-item">
+                                                                    <span className="order-card-label">Phone</span>
+                                                                    <span className="order-card-value">{o.phone_number}</span>
+                                                                </div>
+                                                                <div className="order-card-item">
+                                                                    <span className="order-card-label">Delivery Date</span>
+                                                                    <span className="order-card-value" style={{ color: activeTab === 'overdue' ? '#B71C1C' : 'inherit', fontWeight: activeTab === 'overdue' ? 700 : 500 }}>
+                                                                        {o.delivery_date
+                                                                            ? new Date(o.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                                                                            : '—'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="order-card-actions">
+                                                                <Link to={`/customer/${o.customer_id}`} state={{ from: '/' }} className="btn btn-sm btn-ghost">
+                                                                    <Users size={14} /> Measurements
+                                                                </Link>
+                                                                <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
+                                                                    <Eye size={12} /> View Bill
+                                                                </Link>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {hasMore && (
+                                                        <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                                                            <Link to={`/orders?status=${targetStatus}`} className="btn btn-outline" style={{ width: '100%', justifyContent: 'center', background: 'var(--blush)' }}>
+                                                                View More ({(list.length - 5)} more)
+                                                            </Link>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </>
                             )}
                         </div>
                     </div>
@@ -293,7 +353,7 @@ export default function Dashboard({ onMenuClick }) {
                         <h3 className="card-title">Recent Orders</h3>
                         <Link to="/orders" className="btn btn-sm btn-ghost">View All</Link>
                     </div>
-                    <div className="table-container" style={{ border: 'none', maxHeight: 380, overflowY: 'auto' }}>
+                    <div className="table-container hide-on-mobile" style={{ border: 'none', maxHeight: 380, overflowY: 'auto' }}>
                         <table>
                             <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
                                 <tr>
@@ -313,7 +373,7 @@ export default function Dashboard({ onMenuClick }) {
                                     <tr key={o.order_id}>
                                         <td><span style={{ fontWeight: 600, color: 'var(--maroon)' }}>#{String(o.order_id).padStart(4, '0')}</span></td>
                                         <td>
-                                            <Link to={`/customer/${o.customer_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                                            <Link to={`/customer/${o.customer_id}`} state={{ from: '/' }} style={{ color: 'inherit', textDecoration: 'none' }}>
                                                 <strong>{o.customer_name}</strong>
                                             </Link>
                                         </td>
@@ -324,7 +384,7 @@ export default function Dashboard({ onMenuClick }) {
                                         <td><StatusBadge status={o.status} /></td>
                                         <td>
                                             <div className="flex gap-8">
-                                                <Link to={`/customer/${o.customer_id}`} className="btn btn-sm btn-ghost p-4" title="View Measurements">
+                                                <Link to={`/customer/${o.customer_id}`} state={{ from: '/' }} className="btn btn-sm btn-ghost p-4" title="View Measurements">
                                                     <Users size={14} />
                                                 </Link>
                                                 <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
@@ -336,6 +396,55 @@ export default function Dashboard({ onMenuClick }) {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                    <div className="mobile-cards show-on-mobile" style={{ padding: '16px' }}>
+                        {!data?.recentOrders?.length && (
+                            <div className="empty-state">No orders yet</div>
+                        )}
+                        {data?.recentOrders?.map(o => (
+                            <div className="order-card" key={o.order_id}>
+                                <div className="order-card-header">
+                                    <div className="order-card-id" style={{ color: 'var(--maroon)' }}>
+                                        #{String(o.order_id).padStart(4, '0')}
+                                    </div>
+                                    <StatusBadge status={o.status} />
+                                </div>
+                                <div className="order-card-body">
+                                    <div className="order-card-item">
+                                        <span className="order-card-label">Customer</span>
+                                        <Link to={`/customer/${o.customer_id}`} state={{ from: '/' }} className="order-card-value" style={{ fontWeight: 600 }}>
+                                            {o.customer_name}
+                                        </Link>
+                                    </div>
+                                    <div className="order-card-item">
+                                        <span className="order-card-label">Phone</span>
+                                        <span className="order-card-value">{o.phone_number}</span>
+                                    </div>
+                                    <div className="order-card-item">
+                                        <span className="order-card-label">Booking Date</span>
+                                        <span className="order-card-value">{formatDate(o.booking_date)}</span>
+                                    </div>
+                                    <div className="order-card-item">
+                                        <span className="order-card-label">Delivery Date</span>
+                                        <span className="order-card-value" style={{ fontWeight: 600 }}>{formatDate(o.delivery_date)}</span>
+                                    </div>
+                                    <div className="order-card-item" style={{ gridColumn: 'span 2' }}>
+                                        <span className="order-card-label">Amount</span>
+                                        <span className="order-card-value" style={{ fontSize: 15, fontWeight: 700, color: 'var(--maroon-dark)' }}>
+                                            {`\u20b9${parseFloat(o.total_amount).toLocaleString('en-IN')}`}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="order-card-actions">
+                                    <Link to={`/customer/${o.customer_id}`} state={{ from: '/' }} className="btn btn-sm btn-ghost">
+                                        <Users size={14} /> Measurements
+                                    </Link>
+                                    <Link to={`/bill/${o.order_id}`} className="btn btn-sm btn-outline">
+                                        <Eye size={12} /> View Bill
+                                    </Link>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

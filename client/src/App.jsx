@@ -62,7 +62,7 @@ export default function App() {
   if (!auth) {
     return (
       <BrowserRouter>
-        <Toaster position="top-center" toastOptions={{ duration: 2000 }} />
+        <Toaster position={window.innerWidth <= 768 ? "bottom-center" : "top-right"} toastOptions={{ duration: 2000 }} />
         <Routes>
           <Route path="*" element={<Login setAuth={setAuth} />} />
         </Routes>
@@ -76,7 +76,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Toaster position="top-center" toastOptions={{ duration: 2000 }} />
+      <Toaster position={window.innerWidth <= 768 ? "bottom-center" : "top-right"} toastOptions={{ duration: 2000 }} />
       <div className={`app-layout ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <OfflineBannerWrapper isOnline={isOnline} isSyncing={isSyncing} syncOfflineOrders={syncOfflineOrders} />
         <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} auth={auth} setAuth={setAuth} />

@@ -36,7 +36,7 @@ function PeriodCards({ income, expense, profit, balance, loading }) {
     ];
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 600 ? '1fr' : (window.innerWidth <= 1024 ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)'), gap: 14 }}>
             {cards.map(({ label, value, bg, border, icon: Icon }) => (
                 <div key={label} style={{
                     background: bg,

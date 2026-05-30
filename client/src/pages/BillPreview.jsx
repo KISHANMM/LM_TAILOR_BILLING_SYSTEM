@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Download, Share2, Printer, ChevronLeft, CheckCircle, Clock, Menu, Image as ImageIcon, X, Mic, Edit2 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import toast from 'react-hot-toast';
@@ -19,6 +19,7 @@ function formatDate(d) {
 export default function BillPreview({ onMenuClick }) {
     const { orderId } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const [order, setOrder] = useState(null);
     const [images, setImages] = useState([]);
     const [voiceNotes, setVoiceNotes] = useState([]);
@@ -133,6 +134,7 @@ export default function BillPreview({ onMenuClick }) {
             `\n\n*Total: \u20b9${parseFloat(order.total_amount).toFixed(2)}*\n` +
             `Advance Paid: \u20b9${parseFloat(order.advance_paid).toFixed(2)}\n` +
             `*Balance Due: \u20b9${parseFloat(order.balance_amount).toFixed(2)}*\n\n` +
+            `*Note: We are not responsible for clothes left over 3 months.*\n\n` +
             `_LM Ladies Tailor | Dajibanpeth, Beside Ganesh Temple, Hubli | 9916562127_`
         );
         window.open(`https://wa.me/${phoneForUrl}?text=${msg}`, '_blank');
@@ -380,6 +382,7 @@ export default function BillPreview({ onMenuClick }) {
 
                             {/* Footer */}
                             <div style={{ background: 'var(--maroon-dark)', color: 'rgba(198,167,94,0.6)', textAlign: 'center', padding: '14px 20px', fontSize: 11, borderTop: '2px solid var(--gold)' }}>
+                                <div style={{ fontWeight: 600, color: '#e5c158', marginBottom: 8, fontSize: 10, letterSpacing: '0.02em' }}>Note: We are not responsible for clothes left over 3 months.</div>
                                 <div>Thank you for choosing LM Ladies Tailor!</div>
                                 <div style={{ marginTop: 3, fontSize: 10 }}>This is a computer-generated receipt. No signature required.</div>
                             </div>
@@ -512,7 +515,7 @@ export default function BillPreview({ onMenuClick }) {
                                     </Link>
                                 )}
                                 {order.customer_id && (
-                                    <Link to={`/customer/${order.customer_id}`} className="btn btn-outline" style={{ justifyContent: 'center' }}>📏 Measurements</Link>
+                                    <Link to={`/customer/${order.customer_id}`} state={{ from: location.pathname }} className="btn btn-outline" style={{ justifyContent: 'center' }}>📏 Measurements</Link>
                                 )}
                             </div>
                         </div>

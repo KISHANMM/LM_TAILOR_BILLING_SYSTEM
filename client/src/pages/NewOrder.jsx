@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, ChevronDown, User, Ruler, Scissors, CreditCard, Search, Menu, Image as ImageIcon, Camera, X, Mic, Square, Trash, PenTool } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, User, Ruler, Scissors, CreditCard, Search, Menu, Image as ImageIcon, Camera, X, Mic, Square, Trash, PenTool, FolderOpen, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import QRCode from 'react-qr-code';
 import api from '../api/axios';
@@ -73,6 +73,19 @@ export default function NewOrder({ onMenuClick, auth }) {
     const [deliveryDate, setDeliveryDate] = useState(initialDraft?.deliveryDate || '');
     const [assignedWorker, setAssignedWorker] = useState(initialDraft?.assignedWorker || 'Praveen');
 
+    const initialExtraMeasurement = () => ({
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+        name: '',
+        type: 'BLOUSE',
+        values: {
+            m_length: '', shoulder: '', chest: '', waist: '', dot: '',
+            back_neck: '', front_neck: '', sleeves_length: '', armhole: '',
+            chest_distance: '', sleeves_round: '',
+            t_length: '', t_shoulder: '', t_chest: '', t_waist: '', t_back_neck: '', t_front_neck: '', t_sleeves_length: '', t_sleeves_round: '', t_half_body: '', t_hip: '',
+            b_length: '', b_bottom_round: '', b_hip: '', b_fly: '', b_thai: '', b_knee: '',
+        }
+    });
+
     // Measurements
     const [measurementType, setMeasurementType] = useState(initialDraft?.measurementType || 'Body'); // 'Body' or 'Sample'
     const [activeTab, setActiveTab] = useState(initialDraft?.activeTab || 'BLOUSE'); // 'BLOUSE', 'TOP', or 'BOTTOM'
@@ -83,6 +96,20 @@ export default function NewOrder({ onMenuClick, auth }) {
         t_length: '', t_shoulder: '', t_chest: '', t_waist: '', t_back_neck: '', t_front_neck: '', t_sleeves_length: '', t_sleeves_round: '', t_half_body: '', t_hip: '',
         b_length: '', b_bottom_round: '', b_hip: '', b_fly: '', b_thai: '', b_knee: '',
     });
+    const [extraMeasurements, setExtraMeasurements] = useState(initialDraft?.extraMeasurements || []);
+
+    function addExtraMeasurement() {
+        setExtraMeasurements(prev => [...prev, initialExtraMeasurement()]);
+    }
+    function removeExtraMeasurement(id) {
+        setExtraMeasurements(prev => prev.filter(m => m.id !== id));
+    }
+    function updateExtraMeasurement(id, field, val) {
+        setExtraMeasurements(prev => prev.map(m => m.id === id ? { ...m, [field]: val } : m));
+    }
+    function updateExtraMeasurementValue(id, key, val) {
+        setExtraMeasurements(prev => prev.map(m => m.id === id ? { ...m, values: { ...m.values, [key]: val } } : m));
+    }
 
     // Services
     const [services, setServices] = useState(initialDraft?.services || [initialService()]);
@@ -113,13 +140,142 @@ export default function NewOrder({ onMenuClick, auth }) {
     // ── Image Viewer State ────────────────────────────
     const [selectedImage, setSelectedImage] = useState(null);
 
+    // ── Multiple Drafts Manager ───────────────────────
+    const [showDraftsModal, setShowDraftsModal] = useState(false);
+    const [activeDraftId, setActiveDraftId] = useState(null);
+    const [savedDrafts, setSavedDrafts] = useState(() => {
+        try {
+            const list = localStorage.getItem('lm_tailor_drafts');
+            return list ? JSON.parse(list) : [];
+        } catch { return []; }
+    });
+
+    const deleteActiveDraft = () => {
+        if (!activeDraftId) return;
+        const list = localStorage.getItem('lm_tailor_drafts');
+        if (list) {
+            try {
+                const parsed = JSON.parse(list);
+                const filtered = parsed.filter(d => d.id !== activeDraftId);
+                localStorage.setItem('lm_tailor_drafts', JSON.stringify(filtered));
+                setSavedDrafts(filtered);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        setActiveDraftId(null);
+    };
+
+    const saveCurrentAsDraft = () => {
+        const defaultName = customer.name ? `Draft for ${customer.name}` : `Draft at ${new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+        const draftName = window.prompt("Enter a name for this draft:", defaultName);
+        if (draftName === null) return; // user cancelled
+        
+        const newDraft = {
+            id: Date.now().toString(),
+            name: draftName || defaultName,
+            createdAt: new Date().toISOString(),
+            payload: {
+                customer,
+                customerId,
+                customerFound,
+                deliveryDate,
+                assignedWorker,
+                measurementType,
+                activeTab,
+                measurements,
+                extraMeasurements,
+                services,
+                images,
+                advancePaid,
+                paymentMethod
+            }
+        };
+
+        const updated = [newDraft, ...savedDrafts];
+        setSavedDrafts(updated);
+        localStorage.setItem('lm_tailor_drafts', JSON.stringify(updated));
+        toast.success("Draft saved successfully!");
+        clearForm(true); // Automatically clear the form fields to start a new order
+    };
+
+    const loadDraft = (draft) => {
+        const confirmLoad = window.confirm(`Load "${draft.name}"? This will overwrite the current form details.`);
+        if (!confirmLoad) return;
+
+        const p = draft.payload;
+        if (p.customer) setCustomer(p.customer);
+        setCustomerId(p.customerId ?? null);
+        setCustomerFound(p.customerFound ?? false);
+        if (p.deliveryDate) setDeliveryDate(p.deliveryDate);
+        if (p.assignedWorker) setAssignedWorker(p.assignedWorker);
+        if (p.measurementType) setMeasurementType(p.measurementType);
+        if (p.activeTab) setActiveTab(p.activeTab);
+        if (p.measurements) setMeasurements(p.measurements);
+        if (p.extraMeasurements) setExtraMeasurements(p.extraMeasurements);
+        if (p.services) setServices(p.services);
+        if (p.images) setImages(p.images);
+        if (p.advancePaid) setAdvancePaid(p.advancePaid);
+        if (p.paymentMethod) setPaymentMethod(p.paymentMethod);
+
+        setActiveDraftId(draft.id);
+        setShowDraftsModal(false);
+        toast.success(`Draft "${draft.name}" loaded successfully!`);
+    };
+
+    const deleteDraft = (draftId, e) => {
+        e.stopPropagation();
+        const confirmDel = window.confirm("Are you sure you want to delete this draft?");
+        if (!confirmDel) return;
+
+        const updated = savedDrafts.filter(d => d.id !== draftId);
+        setSavedDrafts(updated);
+        localStorage.setItem('lm_tailor_drafts', JSON.stringify(updated));
+        if (draftId === activeDraftId) {
+            setActiveDraftId(null);
+        }
+        toast.success("Draft deleted.");
+    };
+
+    const clearForm = (skipConfirm = false) => {
+        if (skipConfirm !== true) {
+            const confirmClear = window.confirm("Are you sure you want to clear the entire form to start a new bill?");
+            if (!confirmClear) return;
+        }
+
+        setCustomer({ name: '', phone_number: '', notes: '' });
+        setCustomerId(null);
+        setCustomerFound(false);
+        setDeliveryDate('');
+        setAssignedWorker('Praveen');
+        setMeasurementType('Body');
+        setActiveTab('BLOUSE');
+        setMeasurements({
+            m_length: '', shoulder: '', chest: '', waist: '', dot: '',
+            back_neck: '', front_neck: '', sleeves_length: '', armhole: '',
+            chest_distance: '', sleeves_round: '',
+            t_length: '', t_shoulder: '', t_chest: '', t_waist: '', t_back_neck: '', t_front_neck: '', t_sleeves_length: '', t_sleeves_round: '', t_half_body: '', t_hip: '',
+            b_length: '', b_bottom_round: '', b_hip: '', b_fly: '', b_thai: '', b_knee: '',
+        });
+        setExtraMeasurements([]);
+        setServices([initialService()]);
+        setImages([]);
+        setAdvancePaid('');
+        setPaymentMethod('Cash');
+        clearAudio();
+        setActiveDraftId(null);
+        if (skipConfirm !== true) {
+            toast.success("Form cleared! Ready for new bill.");
+        }
+    };
+
     // ── Draft Persistence ─────────────────────────────
     useEffect(() => {
         const draft = {
-            customer, customerId, customerFound, bookingDate, deliveryDate, assignedWorker, measurementType, activeTab, measurements, services, images, advancePaid, paymentMethod
+            customer, customerId, customerFound, bookingDate, deliveryDate, assignedWorker, measurementType, activeTab, measurements, extraMeasurements, services, images, advancePaid, paymentMethod
         };
         localStorage.setItem('newOrderDraft', JSON.stringify(draft));
-    }, [customer, customerId, customerFound, bookingDate, deliveryDate, assignedWorker, measurementType, activeTab, measurements, services, images, advancePaid, paymentMethod]);
+    }, [customer, customerId, customerFound, bookingDate, deliveryDate, assignedWorker, measurementType, activeTab, measurements, extraMeasurements, services, images, advancePaid, paymentMethod]);
 
     // ── Computed totals ───────────────────────────────
     const totalAmount = services.reduce((s, svc) => {
@@ -151,6 +307,18 @@ export default function NewOrder({ onMenuClick, auth }) {
                     m[k] = found[k] !== null && found[k] !== undefined ? String(found[k] ?? '') : ''; 
                 });
                 setMeasurements(m);
+                if (found.extra_measurements) {
+                    try {
+                        const parsed = typeof found.extra_measurements === 'string'
+                            ? JSON.parse(found.extra_measurements)
+                            : found.extra_measurements;
+                        setExtraMeasurements(Array.isArray(parsed) ? parsed : []);
+                    } catch (e) {
+                        setExtraMeasurements([]);
+                    }
+                } else {
+                    setExtraMeasurements([]);
+                }
                 toast.success(`Customer found: ${found.name}`);
             } else {
                 setCustomerFound(false);
@@ -321,6 +489,9 @@ export default function NewOrder({ onMenuClick, auth }) {
         // Prepare data payloads
         const measPayload = {};
         ALL_MEASUREMENT_KEYS.forEach(k => { if (measurements[k]) measPayload[k] = parseFloat(measurements[k]); });
+        if (extraMeasurements && extraMeasurements.length > 0) {
+            measPayload.extra_measurements = extraMeasurements;
+        }
 
         const svcList = services.map(s => ({
             service_type: s.service_type === 'Other' ? (s.custom_type || 'Other') : s.service_type,
@@ -356,6 +527,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                 const insertId = await saveOfflineOrder(offlineData);
                 toast.success('Offline mode: Order saved locally! It will sync when internet is back.', { duration: 5000 });
                 localStorage.removeItem('newOrderDraft');
+                deleteActiveDraft();
                 
                 if (auth?.role === 'Worker') {
                     navigate('/');
@@ -390,6 +562,7 @@ export default function NewOrder({ onMenuClick, auth }) {
 
             toast.success('Order created successfully!');
             localStorage.removeItem('newOrderDraft');
+            deleteActiveDraft();
             if (auth?.role === 'Worker') {
                 navigate('/');
             } else {
@@ -466,6 +639,17 @@ export default function NewOrder({ onMenuClick, auth }) {
                         <div className="topbar-title">New Order</div>
                         <div className="topbar-subtitle">Create a new tailoring order</div>
                     </div>
+                </div>
+                <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowDraftsModal(true)} title={`View Saved Drafts (${savedDrafts.length})`} style={{ padding: '6px 12px', fontSize: 12 }}>
+                        <FolderOpen size={14} /> <span className="hide-mobile">Drafts </span>({savedDrafts.length})
+                    </button>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={saveCurrentAsDraft} title="Save Current Form as Draft" style={{ padding: '6px 12px', fontSize: 12 }}>
+                        <Save size={14} /> <span className="hide-mobile">Save Draft</span>
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={clearForm} title="Clear Form to start a new bill" style={{ padding: '6px 12px', fontSize: 12, color: 'var(--maroon)' }}>
+                        <span className="hide-mobile">Clear</span>
+                    </button>
                 </div>
             </div>
 
@@ -573,18 +757,26 @@ export default function NewOrder({ onMenuClick, auth }) {
                     <div className="card mb-16">
                         <div className="card-header flex-between">
                             <h3 className="card-title flex gap-8"><Ruler size={18} color="var(--gold)" /> Fittings & Measurements</h3>
-                            <div className="flex gap-8" style={{ background: 'var(--ivory)', padding: 4, borderRadius: 20, border: '1px solid var(--gray-light)' }}>
+                            <div className="flex gap-4" style={{ 
+                                background: 'var(--ivory)', 
+                                padding: 4, 
+                                borderRadius: 20, 
+                                border: '1px solid var(--gray-light)',
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                justifyContent: 'center'
+                            }}>
                                 <button type="button"
                                     className={`btn btn-sm ${measurementType === 'Body' ? 'btn-primary' : 'btn-ghost'}`}
-                                    style={{ borderRadius: 16 }}
+                                    style={{ borderRadius: 16, padding: '4px 10px', fontSize: '12px', flex: '1 1 auto' }}
                                     onClick={() => setMeasurementType('Body')}>
                                     Body Measurements
                                 </button>
                                 <button type="button"
                                     className={`btn btn-sm ${measurementType === 'Sample' ? 'btn-primary' : 'btn-ghost'}`}
-                                    style={{ borderRadius: 16 }}
+                                    style={{ borderRadius: 16, padding: '4px 10px', fontSize: '12px', flex: '1 1 auto' }}
                                     onClick={() => setMeasurementType('Sample')}>
-                                    Existing Blouse Piece
+                                    Existing Piece
                                 </button>
                             </div>
                         </div>
@@ -607,7 +799,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                                     ✅ Customer provided an existing fitting piece. Body measurements are not required.
                                 </div>
                             ) : (
-                                <div className="grid-3">
+                                <div className="measurements-grid">
                                     {(measurementLabels[activeTab] || []).map(f => (
                                         <div className="form-group" key={f.key}>
                                             <label className="form-label">{f.label}</label>
@@ -627,6 +819,74 @@ export default function NewOrder({ onMenuClick, auth }) {
                                     ))}
                                 </div>
                             )}
+
+                            {/* ─── EXTRA MEASUREMENTS (DYNAMIC ROWS) ─── */}
+                            {measurementType !== 'Sample' && (
+                                <div style={{ marginTop: 24, paddingTop: 20, borderTop: '2px dashed var(--gray-light)' }}>
+                                    <div className="flex-between mb-16">
+                                        <h4 style={{ margin: 0, fontFamily: 'var(--font-serif)', color: 'var(--maroon-dark)', fontSize: 16, fontWeight: 600 }}>
+                                            Extra Blouse & Chudhidhar Measurements
+                                        </h4>
+                                        <button type="button" className="btn btn-sm btn-outline" onClick={addExtraMeasurement} style={{ gap: 6 }}>
+                                            <Plus size={14} /> Add Blouse / Garment Row
+                                        </button>
+                                    </div>
+
+                                    {extraMeasurements.map((extra, idx) => (
+                                        <div key={extra.id} className="card mb-16" style={{ background: 'var(--ivory)', border: '1px solid var(--gold-pale)', padding: 16 }}>
+                                            <div className="flex-between mb-12" style={{ flexWrap: 'wrap', gap: 12 }}>
+                                                <div style={{ flex: 1, minWidth: '200px', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                                                    <div style={{ flex: 2, minWidth: '150px' }}>
+                                                        <label className="form-label" style={{ fontSize: 11 }}>Garment / Blouse Name *</label>
+                                                        <input
+                                                            className="form-input"
+                                                            value={extra.name}
+                                                            onChange={e => updateExtraMeasurement(extra.id, 'name', e.target.value)}
+                                                            placeholder="e.g. Blouse 2, Sister's blouse, Deep neck blouse..."
+                                                            required
+                                                            style={{ height: 32, fontSize: 13 }}
+                                                        />
+                                                    </div>
+                                                    <div style={{ flex: 1, minWidth: '100px' }}>
+                                                        <label className="form-label" style={{ fontSize: 11 }}>Garment Type</label>
+                                                        <select
+                                                            className="form-select"
+                                                            value={extra.type}
+                                                            onChange={e => updateExtraMeasurement(extra.id, 'type', e.target.value)}
+                                                            style={{ height: 32, fontSize: 13, padding: '0 8px' }}
+                                                        >
+                                                            <option value="BLOUSE">BLOUSE</option>
+                                                            <option value="CHUDHIDHAR">CHUDHIDHAR</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <button type="button" className="btn btn-sm btn-ghost" onClick={() => removeExtraMeasurement(extra.id)} style={{ color: 'var(--maroon)', alignSelf: 'flex-end', height: 32 }} title="Remove this garment">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+
+                                            <div className="measurements-grid">
+                                                {(measurementLabels[extra.type] || []).map(f => (
+                                                    <div className="form-group" key={f.key}>
+                                                        <label className="form-label">{f.label}</label>
+                                                        <div className="input-prefix">
+                                                            <span className="prefix-symbol" style={{ fontSize: 11, padding: '10px 8px' }}>inches</span>
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                min="0"
+                                                                value={extra.values[f.key] || ''}
+                                                                onChange={e => updateExtraMeasurementValue(extra.id, f.key, e.target.value)}
+                                                                placeholder="0"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -640,7 +900,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                         </div>
                         <div className="card-body">
                             {/* Header row */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.8fr 1.2fr auto', gap: 12, marginBottom: 8 }}>
+                            <div className="service-header-row">
                                 <span className="form-label">Service Type</span>
                                 <span className="form-label">Qty</span>
                                 <span className="form-label">Price (₹)</span>
@@ -648,8 +908,9 @@ export default function NewOrder({ onMenuClick, auth }) {
                             </div>
 
                             {services.map((svc, i) => (
-                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 0.8fr 1.2fr auto', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
-                                    <div>
+                                <div key={i} className="service-item-row">
+                                    <div className="service-type-col">
+                                        <label className="form-label show-on-mobile">Service Type</label>
                                         <select
                                             className="form-select"
                                             value={svc.service_type}
@@ -667,35 +928,42 @@ export default function NewOrder({ onMenuClick, auth }) {
                                             />
                                         )}
                                     </div>
-                                    <input
-                                        className="form-input"
-                                        type="number"
-                                        min="1"
-                                        value={svc.quantity}
-                                        onChange={e => updateService(i, 'quantity', e.target.value)}
-                                        required
-                                    />
-                                    <div className="input-prefix">
-                                        <span className="prefix-symbol">₹</span>
+                                    <div className="service-qty-col">
+                                        <label className="form-label show-on-mobile">Qty</label>
                                         <input
+                                            className="form-input"
                                             type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={svc.price}
-                                            onChange={e => updateService(i, 'price', e.target.value)}
-                                            placeholder="0.00"
+                                            min="1"
+                                            value={svc.quantity}
+                                            onChange={e => updateService(i, 'quantity', e.target.value)}
                                             required
                                         />
                                     </div>
-                                    <button
-                                        type="button"
-                                        className="btn btn-sm btn-danger"
-                                        onClick={() => removeService(i)}
-                                        disabled={services.length === 1}
-                                        style={{ padding: '10px' }}
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                                    <div className="service-price-col">
+                                        <label className="form-label show-on-mobile">Price (₹)</label>
+                                        <div className="input-prefix">
+                                            <span className="prefix-symbol">₹</span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={svc.price}
+                                                onChange={e => updateService(i, 'price', e.target.value)}
+                                                placeholder="0.00"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="service-action-col">
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-danger delete-service-btn"
+                                            onClick={() => removeService(i)}
+                                            disabled={services.length === 1}
+                                        >
+                                            <Trash2 size={14} /> <span className="show-on-mobile">Delete</span>
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
 
@@ -862,9 +1130,9 @@ export default function NewOrder({ onMenuClick, auth }) {
                     </div>
 
                     {/* Submit */}
-                    <div className="flex gap-12" style={{ justifyContent: 'flex-end', marginTop: 8, paddingBottom: 8 }}>
-                        <button type="button" className="btn btn-ghost" onClick={() => { localStorage.removeItem('newOrderDraft'); navigate('/'); }}>Cancel</button>
-                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ minWidth: 200, justifyContent: 'center' }}>
+                    <div className="flex gap-12" style={{ justifyContent: 'flex-end', marginTop: 8, paddingBottom: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="btn btn-ghost" style={{ flex: '1 1 auto', minWidth: '100px' }} onClick={() => { localStorage.removeItem('newOrderDraft'); navigate('/'); }}>Cancel</button>
+                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ flex: '2 1 200px', minWidth: '200px', justifyContent: 'center' }}>
                             {loading ? (
                                 <><span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTop: '2px solid #fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />&nbsp;Creating..&nbsp;</>
                             ) : '✓ Create Order & View Bill'}
@@ -888,6 +1156,78 @@ export default function NewOrder({ onMenuClick, auth }) {
                     <button style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', cursor: 'pointer', borderRadius: '50%', padding: '8px', display: 'flex' }} onClick={() => setSelectedImage(null)}>
                         <X size={24} />
                     </button>
+                </div>
+            )}
+
+            {/* Drafts Modal Overlay */}
+            {showDraftsModal && (
+                <div style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 9999,
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 16
+                }} onClick={() => setShowDraftsModal(false)}>
+                    <div className="card" style={{
+                        width: '100%',
+                        maxWidth: 480,
+                        maxHeight: '80vh',
+                        overflowY: 'auto',
+                        background: '#fff',
+                        boxShadow: '0 8px 30px rgba(0,0,0,0.12)'
+                    }} onClick={e => e.stopPropagation()}>
+                        <div className="card-header flex-between" style={{ borderBottom: '1px solid var(--gray-light)' }}>
+                            <h3 className="card-title flex gap-8">
+                                <FolderOpen size={18} color="var(--gold)" /> Saved Drafts
+                            </h3>
+                            <button type="button" className="btn btn-sm btn-ghost p-4" onClick={() => setShowDraftsModal(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="card-body" style={{ padding: 16 }}>
+                            {savedDrafts.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--gray)' }}>
+                                    <FolderOpen size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+                                    <div>No saved drafts found.</div>
+                                    <div style={{ fontSize: 12, marginTop: 4 }}>Fill the form and click "Save Draft" to keep your work.</div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-column gap-12">
+                                    {savedDrafts.map(d => (
+                                        <div key={d.id} className="draft-item" style={{
+                                            padding: 12,
+                                            borderRadius: 8,
+                                            background: 'var(--ivory)',
+                                            border: '1px solid var(--gray-light)',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
+                                        }} onClick={() => loadDraft(d)}>
+                                            <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+                                                <strong style={{ display: 'block', fontSize: 14, color: 'var(--maroon)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                                    {d.name}
+                                                </strong>
+                                                <span style={{ fontSize: 11, color: 'var(--gray)' }}>
+                                                    Saved: {new Date(d.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} · {new Date(d.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                            <div className="flex gap-4">
+                                                <button type="button" className="btn btn-sm btn-danger p-8" onClick={(e) => deleteDraft(d.id, e)} title="Delete draft">
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
 
