@@ -665,7 +665,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                             {/* Phone search row */}
                             <div className="form-group">
                                 <label className="form-label">Phone Number *</label>
-                                <div className="flex gap-12">
+                                <div className="flex gap-12 phone-search-row">
                                     <div className="input-prefix" style={{ flex: 1 }}>
                                         <span className="prefix-symbol">+91</span>
                                         <input
@@ -834,9 +834,9 @@ export default function NewOrder({ onMenuClick, auth }) {
 
                                     {extraMeasurements.map((extra, idx) => (
                                         <div key={extra.id} className="card mb-16" style={{ background: 'var(--ivory)', border: '1px solid var(--gold-pale)', padding: 16 }}>
-                                            <div className="flex-between mb-12" style={{ flexWrap: 'wrap', gap: 12 }}>
-                                                <div style={{ flex: 1, minWidth: '200px', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                                    <div style={{ flex: 2, minWidth: '150px' }}>
+                                            <div className="flex-between mb-12 extra-meas-header" style={{ flexWrap: 'wrap', gap: 12 }}>
+                                                <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                                                    <div style={{ flex: 2, minWidth: 0 }}>
                                                         <label className="form-label" style={{ fontSize: 11 }}>Garment / Blouse Name *</label>
                                                         <input
                                                             className="form-input"
@@ -847,7 +847,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                                                             style={{ height: 32, fontSize: 13 }}
                                                         />
                                                     </div>
-                                                    <div style={{ flex: 1, minWidth: '100px' }}>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
                                                         <label className="form-label" style={{ fontSize: 11 }}>Garment Type</label>
                                                         <select
                                                             className="form-select"
@@ -1002,7 +1002,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                                         multiple
                                         onChange={handleImageUpload}
                                         className="form-input"
-                                        style={{ padding: '8px' }}
+                                        style={{ padding: '8px', maxWidth: '100%', boxSizing: 'border-box' }}
                                     />
                                 </div>
                                 <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1018,18 +1018,18 @@ export default function NewOrder({ onMenuClick, auth }) {
                                     <button
                                         type="button"
                                         className="btn btn-outline"
-                                        style={{ width: '100%', height: '42px', display: 'flex', justifyContent: 'center', gap: 8, borderColor: 'var(--gold)', color: 'var(--gold)' }}
+                                        style={{ width: '100%', minHeight: '42px', height: 'auto', display: 'flex', justifyContent: 'center', gap: 8, borderColor: 'var(--gold)', color: 'var(--gold)' }}
                                         onClick={() => cameraInputRef.current?.click()}
                                     >
                                         <Camera size={18} /> Take Photo
                                     </button>
                                 </div>
-                                <div className="form-group" style={{ marginBottom: 0, gridColumn: 'span 2' }}>
+                                <div className="form-group grid-span-2" style={{ marginBottom: 0 }}>
                                     <label className="form-label">Scratch Pad (Draw Backneck Patterns)</label>
                                     <button
                                         type="button"
                                         className="btn btn-outline"
-                                        style={{ width: '100%', height: '42px', display: 'flex', justifyContent: 'center', gap: 8, borderColor: 'var(--maroon)', color: 'var(--maroon)' }}
+                                        style={{ width: '100%', minHeight: '42px', height: 'auto', display: 'flex', justifyContent: 'center', gap: 8, borderColor: 'var(--maroon)', color: 'var(--maroon)' }}
                                         onClick={() => setShowScratchPad(true)}
                                     >
                                         <PenTool size={18} /> Open Scratch Pad
@@ -1108,7 +1108,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                                     </div>
                                 </div>
                                 <div>
-                                    <div style={{ background: 'var(--ivory)', borderRadius: 10, padding: '16px 20px', border: '1px solid var(--gray-light)' }}>
+                                    <div className="payment-summary-card" style={{ background: 'var(--ivory)', borderRadius: 10, padding: '16px 20px', border: '1px solid var(--gray-light)' }}>
                                         <div className="flex-between" style={{ padding: '6px 0', borderBottom: '1px solid var(--gray-light)' }}>
                                             <span style={{ color: 'var(--gray)', fontSize: 13 }}>Total Amount</span>
                                             <strong style={{ fontSize: 15 }}>₹{totalAmount.toFixed(2)}</strong>
@@ -1130,9 +1130,9 @@ export default function NewOrder({ onMenuClick, auth }) {
                     </div>
 
                     {/* Submit */}
-                    <div className="flex gap-12" style={{ justifyContent: 'flex-end', marginTop: 8, paddingBottom: 8, flexWrap: 'wrap' }}>
-                        <button type="button" className="btn btn-ghost" style={{ flex: '1 1 auto', minWidth: '100px' }} onClick={() => { localStorage.removeItem('newOrderDraft'); navigate('/'); }}>Cancel</button>
-                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ flex: '2 1 200px', minWidth: '200px', justifyContent: 'center' }}>
+                    <div className="flex gap-12 submit-row" style={{ justifyContent: 'flex-end', marginTop: 8, paddingBottom: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="btn btn-ghost" style={{ flex: '1 1 auto', minWidth: '80px' }} onClick={() => { localStorage.removeItem('newOrderDraft'); navigate('/'); }}>Cancel</button>
+                        <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ flex: '2 1 160px', minWidth: '160px', justifyContent: 'center' }}>
                             {loading ? (
                                 <><span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTop: '2px solid #fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />&nbsp;Creating..&nbsp;</>
                             ) : '✓ Create Order & View Bill'}
