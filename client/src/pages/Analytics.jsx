@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
     TrendingUp, TrendingDown, DollarSign, Plus, Trash2, Menu,
     ChevronDown, ChevronRight, Download, Star, Award,
-    BarChart2, Calendar, RefreshCw, Layers
+    BarChart2, Calendar, RefreshCw, Layers, FileSpreadsheet
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 import api from '../api/axios';
 
 const CATEGORIES = [
@@ -37,10 +38,10 @@ function PeriodCards({ income, expense, profit, balance, loading }) {
 
     return (
         <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 600 ? '1fr' : (window.innerWidth <= 1024 ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)'), gap: 14 }}>
-            {cards.map(({ label, value, bg, border, icon: Icon }) => (
-                <div key={label} style={{
-                    background: bg,
-                    border: `2px solid ${border}`,
+            {cards.map(c => (
+                <div key={c.label} style={{
+                    background: c.bg,
+                    border: `2px solid ${c.border}`,
                     borderRadius: 12,
                     padding: '20px 18px',
                     display: 'flex',
@@ -54,17 +55,17 @@ function PeriodCards({ income, expense, profit, balance, loading }) {
                         padding: 10,
                         flexShrink: 0,
                     }}>
-                        <Icon size={22} color="#fff" />
+                        <c.icon size={22} color="#fff" />
                     </div>
                     <div>
                         <div style={{ color: 'rgba(255,255,255,0.78)', fontSize: 13, fontWeight: 600, marginBottom: 4, letterSpacing: '0.02em' }}>
-                            {label}
+                            {c.label}
                         </div>
                         {loading ? (
                             <div style={{ height: 32, width: 100, background: 'rgba(255,255,255,0.2)', borderRadius: 6 }} />
                         ) : (
                             <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', lineHeight: 1, letterSpacing: '-0.01em', fontFamily: 'var(--font-inter)' }}>
-                                {fmt(value)}
+                                {fmt(c.value)}
                             </div>
                         )}
                     </div>
@@ -274,6 +275,180 @@ export default function Analytics({ onMenuClick }) {
         toast.success('Exported');
     };
 
+    const handleExportData = async () => {
+        const toastId = toast.loading('Preparing Excel export...');
+        try {
+            const res = await api.get('/analytics/customers-export');
+            const rows = res.data;
+            if (!rows || rows.length === 0) {
+                toast.error('No data to export', { id: toastId });
+                return;
+            }
+
+            // Define column groups
+            const groups = [
+                { title: 'Customer Info', cols: ['customer_name', 'phone'] },
+                { title: 'Order Details', cols: ['order_id', 'order_date', 'delivery_date', 'status', 'measurement_type', 'total_amount', 'advance_paid', 'balance', 'payment_method', 'assigned_worker', 'notes'] },
+                { title: 'Main Measurements', cols: ['m_length', 'shoulder', 'chest', 'waist', 'dot', 'back_neck', 'front_neck', 'sleeves_length', 'sleeves_round', 'armhole', 'chest_distance'] },
+                { title: 'Chudhidhar (Top) Measurements', cols: ['top_length', 'top_shoulder', 'top_chest', 'top_waist', 'top_back_neck', 'top_front_neck', 'top_sleeves_length', 'top_sleeves_round', 'top_half_body', 'top_hip'] },
+                { title: 'Bottom Measurements', cols: ['bottom_length', 'bottom_round', 'bottom_hip', 'bottom_fly', 'bottom_thigh', 'bottom_knee'] },
+                { title: 'Extra Measurements', cols: [] }
+            ];
+
+            const LABELS = {
+                customer_name:       'Customer Name',
+                phone:               'Phone',
+                order_id:            'Order ID',
+                order_date:          'Order Date',
+                delivery_date:       'Delivery Date',
+                status:              'Status',
+                measurement_type:    'Measurement Type',
+                total_amount:        'Total Amount (₹)',
+                advance_paid:        'Advance Paid (₹)',
+                balance:             'Balance (₹)',
+                payment_method:      'Payment Method',
+                assigned_worker:     'Assigned Worker',
+                notes:               'Notes',
+                m_length:            'Length',
+                shoulder:            'Shoulder',
+                chest:               'Chest',
+                waist:               'Waist',
+                dot:                 'Dot',
+                back_neck:           'Back Neck',
+                front_neck:          'Front Neck',
+                sleeves_length:      'Sleeves Length',
+                sleeves_round:       'Sleeves Round',
+                armhole:             'Armhole',
+                chest_distance:      'Chest Distance',
+                top_length:          'Top Length',
+                top_shoulder:        'Top Shoulder',
+                top_chest:           'Top Chest',
+                top_waist:           'Top Waist',
+                top_back_neck:       'Top Back Neck',
+                top_front_neck:      'Top Front Neck',
+                top_sleeves_length:  'Top Sleeves Length',
+                top_sleeves_round:   'Top Sleeves Round',
+                top_half_body:       'Top Half Body',
+                top_hip:             'Top Hip',
+                bottom_length:       'Bottom Length',
+                bottom_round:        'Bottom Round',
+                bottom_hip:          'Bottom Hip',
+                bottom_fly:          'Bottom Fly',
+                bottom_thigh:        'Bottom Thigh',
+                bottom_knee:         'Bottom Knee',
+            };
+
+            // Give each extra garment one column; list its measurements in that cell.
+            const parseExtraMeasurements = (value) => {
+                if (!value) return [];
+                try {
+                    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch {
+                    return [];
+                }
+            };
+            const extrasByRow = rows.map(row => parseExtraMeasurements(row.extra_measurements));
+            const extraColumns = [];
+            const extraColumnKeys = new Set();
+            const getGarmentLabel = (garment, index) => {
+                const name = String(garment.name || `Garment ${index + 1}`).trim();
+                const type = String(garment.type || '').trim();
+                return type && !name.toLowerCase().includes(type.toLowerCase()) ? `${name} (${type})` : name;
+            };
+            extrasByRow.forEach(garments => garments.forEach((garment, index) => {
+                if (!garment || typeof garment !== 'object') return;
+                const garmentLabel = getGarmentLabel(garment, index);
+                const key = `extra:${garmentLabel}`;
+                if (extraColumnKeys.has(key)) return;
+                extraColumnKeys.add(key);
+                extraColumns.push({ key, label: garmentLabel });
+            }));
+            groups[groups.length - 1].cols = extraColumns.map(column => column.key);
+            const extraLabels = Object.fromEntries(extraColumns.map(column => [column.key, column.label]));
+            const groupRow = [];
+            const headerRow = [];
+            const merges = [];
+            let currentCol = 0;
+
+            groups.forEach((g, groupIndex) => {
+                const startCol = currentCol;
+                g.cols.forEach((colKey, i) => {
+                    groupRow.push(i === 0 ? g.title : '');
+                    headerRow.push(extraLabels[colKey] || LABELS[colKey] || colKey);
+                    currentCol++;
+                });
+                const endCol = currentCol - 1;
+                if (endCol > startCol) {
+                    merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: endCol } });
+                }
+                if (groupIndex === 2 || groupIndex === 4) {
+                    groupRow.push('');
+                    headerRow.push('');
+                    currentCol++;
+                }
+            });
+
+            const keys = groups.flatMap((g, groupIndex) => [
+                ...g.cols,
+                ...([2, 4].includes(groupIndex) ? ['separator'] : [])
+            ]);
+            const dataRows = rows.map((r, rowIndex) => {
+                const extraValues = {};
+                extrasByRow[rowIndex].forEach((garment, index) => {
+                    if (!garment || typeof garment !== 'object') return;
+                    const garmentLabel = getGarmentLabel(garment, index);
+                    const details = Object.entries(garment.values || {})
+                        .map(([measurementKey, value]) => `${measurementKey.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())}: ${value ?? ''}`);
+                    extraValues[`extra:${garmentLabel}`] = details.join('\n');
+                });
+                return keys.map(k => k === 'separator' ? '' : (k.startsWith('extra:') ? (extraValues[k] ?? '') : (r[k] ?? '')));
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet([groupRow, headerRow, ...dataRows]);
+            ws['!merges'] = merges;
+
+            // Auto-width columns
+            ws['!cols'] = headerRow.map((h, i) => {
+                const maxLen = Math.max(
+                    h.length,
+                    ...dataRows.map(r => String(r[i] ?? '').length)
+                );
+                return { wch: Math.min(maxLen + 3, 40) };
+            });
+
+            // Style group header row (Row 0) and header row (Row 1)
+            headerRow.forEach((_, i) => {
+                const groupCellRef = XLSX.utils.encode_cell({ r: 0, c: i });
+                if (ws[groupCellRef]) {
+                    ws[groupCellRef].s = {
+                        font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
+                        fill: { fgColor: { rgb: '4A121E' } },
+                        alignment: { horizontal: 'center', vertical: 'center' }
+                    };
+                }
+                const cellRef = XLSX.utils.encode_cell({ r: 1, c: i });
+                if (ws[cellRef]) {
+                    ws[cellRef].s = {
+                        font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 },
+                        fill: { fgColor: { rgb: '6A1E2E' } },
+                        alignment: { horizontal: 'center', vertical: 'center' }
+                    };
+                }
+            });
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Customer Orders');
+
+            const fileName = `customer_orders_${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            toast.success(`Exported ${rows.length} records`, { id: toastId });
+        } catch (err) {
+            console.error('Export error:', err);
+            toast.error('Export failed', { id: toastId });
+        }
+    };
+
     const todayStr = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 
     return (
@@ -298,6 +473,10 @@ export default function Analytics({ onMenuClick }) {
                     <button className="btn btn-outline" onClick={handleExport}>
                         <Download size={15} />
                         <span className="hide-mobile">Export CSV</span>
+                    </button>
+                    <button className="btn btn-outline" onClick={handleExportData}>
+                        <FileSpreadsheet size={15} />
+                        <span className="hide-mobile">Export Data</span>
                     </button>
                 </div>
             </div>

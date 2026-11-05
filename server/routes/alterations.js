@@ -11,7 +11,12 @@ function buildDateFilter(period, col = 'date') {
             return `AND ${col} >= date('now', 'localtime', 'weekday 0', '-6 days') AND ${col} <= date('now', 'localtime')`;
         case 'month':
             return `AND substr(${col}, 1, 7) = substr(date('now', 'localtime'), 1, 7)`;
+        case 'prev_month':
+        case 'previous_month':
+            return `AND substr(${col}, 1, 7) < substr(date('now', 'localtime'), 1, 7) AND ${col} >= date('now', 'localtime', 'start of month', '-12 months')`;
         case 'year':
+            return '';
+        case 'current_year':
             return `AND substr(${col}, 1, 4) = substr(date('now', 'localtime'), 1, 4)`;
         default:
             return '';
@@ -19,10 +24,10 @@ function buildDateFilter(period, col = 'date') {
 }
 
 // ─── GET /api/alterations/dashboard ──────────────────────────────────────────
-// Returns today's date + stats (count of entries, sum of alterations done, sum of amount) for today/week/month/year/alltime
+// Returns today's date + stats (count of entries, sum of alterations done, sum of amount) for today/week/month/prev_month/year/alltime
 router.get('/dashboard', async (req, res) => {
     try {
-        const periods = ['today', 'week', 'month', 'year'];
+        const periods = ['today', 'week', 'month', 'prev_month', 'current_year'];
         const queries = [];
 
         for (const p of periods) {
@@ -43,15 +48,39 @@ router.get('/dashboard', async (req, res) => {
         });
 
         res.json({
-            today_date: results[5].rows[0]?.today || new Date().toISOString().split('T')[0],
+            today_date: results[6].rows[0]?.today || new Date().toISOString().split('T')[0],
             today: mapRow(results[0].rows[0]),
             week: mapRow(results[1].rows[0]),
             month: mapRow(results[2].rows[0]),
-            year: mapRow(results[3].rows[0]),
-            alltime: mapRow(results[4].rows[0]),
+            prev_month: mapRow(results[3].rows[0]),
+            year: mapRow(results[4].rows[0]),
+            alltime: mapRow(results[5].rows[0]),
         });
     } catch (err) {
         console.error('[Alterations] dashboard error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── GET /api/alterations/monthly ─────────────────────────────────────────────
+// Returns grouped monthly summaries for previous months
+router.get('/monthly', async (req, res) => {
+    try {
+        const rs = await db.execute({
+            sql: `SELECT 
+                    substr(date, 1, 7) as month,
+                    COUNT(*) as entries,
+                    COALESCE(SUM(total_alterations), 0) as total_done,
+                    COALESCE(SUM(amount_received), 0) as total_amount
+                  FROM alterations
+                  WHERE substr(date, 1, 7) < substr(date('now', 'localtime'), 1, 7)
+                  GROUP BY substr(date, 1, 7)
+                  ORDER BY month DESC`,
+            args: []
+        });
+        res.json(rs.rows);
+    } catch (err) {
+        console.error('[Alterations] monthly summary error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });

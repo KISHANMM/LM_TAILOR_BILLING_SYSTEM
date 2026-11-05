@@ -5,6 +5,8 @@ import {
     Scissors, X, LineChart, LogOut, DollarSign, Wrench
 } from 'lucide-react';
 
+import { clearAllOfflineCaches } from '../utils/offlineStore';
+
 export default function Sidebar({ isOpen, onClose, auth, setAuth }) {
     const navigate = useNavigate();
     const isAdmin = auth?.role === 'Admin';
@@ -19,9 +21,15 @@ export default function Sidebar({ isOpen, onClose, auth, setAuth }) {
         { to: '/profits',     icon: DollarSign,      label: 'Profits',         show: isAdmin },
     ];
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         localStorage.removeItem('tailor_auth');
+        localStorage.removeItem('tailor_token');
+        localStorage.removeItem('lm_tailor_drafts');
+        localStorage.removeItem('newOrderDraft');
+        sessionStorage.clear();
+        clearAllOfflineCaches().catch(() => {});
         setAuth(null);
+        if (onClose) onClose();
         navigate('/');
     };
 
@@ -78,16 +86,16 @@ export default function Sidebar({ isOpen, onClose, auth, setAuth }) {
             {/* Navigation */}
             <nav className="sidebar-nav" style={{ flex: 1 }}>
                 <p className="nav-section-title">Main Menu</p>
-                {navItems.filter(item => item.show).map(({ to, icon: Icon, label }) => (
+                {navItems.filter(item => item.show).map(item => (
                     <NavLink
-                        key={to}
-                        to={to}
+                        key={item.to}
+                        to={item.to}
                         className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-                        end={to === '/'}
+                        end={item.to === '/'}
                         onClick={onClose}
                     >
-                        <Icon size={16} strokeWidth={1.75} />
-                        {label}
+                        <item.icon size={16} strokeWidth={1.75} />
+                        {item.label}
                     </NavLink>
                 ))}
             </nav>

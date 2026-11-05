@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Package, Clock, CheckCircle, Menu, Plus } from 'lucide-react';
+import { Package, Clock, CheckCircle, Menu, Plus, LogOut } from 'lucide-react';
 import api from '../api/axios';
 import { toast } from 'react-hot-toast';
-import { getWorkerTasksOffline, saveWorkerTasksOffline } from '../utils/offlineStore';
+import { getWorkerTasksOffline, saveWorkerTasksOffline, clearAllOfflineCaches } from '../utils/offlineStore';
 
 function StatusBadge({ status }) {
     const cls = {
@@ -19,14 +19,21 @@ function formatDate(d) {
     return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default function WorkerDashboard({ onMenuClick, auth }) {
+export default function WorkerDashboard({ onMenuClick, auth, setAuth }) {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
-    useEffect(() => {
-        if (auth?.name) fetchOrders();
-    }, [auth.name]);
+    const handleLogout = async () => {
+        localStorage.removeItem('tailor_auth');
+        localStorage.removeItem('tailor_token');
+        localStorage.removeItem('lm_tailor_drafts');
+        localStorage.removeItem('newOrderDraft');
+        sessionStorage.clear();
+        clearAllOfflineCaches().catch(() => {});
+        if (setAuth) setAuth(null);
+        navigate('/');
+    };
 
     const processAndSetOrders = (data) => {
         const activeOrders = data
@@ -35,7 +42,7 @@ export default function WorkerDashboard({ onMenuClick, auth }) {
         setOrders(activeOrders);
     };
 
-    const fetchOrders = async () => {
+    const fetchOrders = useCallback(async () => {
         try {
             setLoading(true);
             const offlineTasks = await getWorkerTasksOffline();
@@ -57,7 +64,11 @@ export default function WorkerDashboard({ onMenuClick, auth }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, [auth?.name]);
+
+    useEffect(() => {
+        if (auth?.name) fetchOrders();
+    }, [auth?.name, fetchOrders]);
 
     if (loading) return (
         <div>
@@ -70,6 +81,17 @@ export default function WorkerDashboard({ onMenuClick, auth }) {
                         <div className="topbar-title">Worker Dashboard</div>
                         <div className="topbar-subtitle">Loading tasks...</div>
                     </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button 
+                        type="button"
+                        className="btn btn-danger btn-sm" 
+                        onClick={handleLogout}
+                        title="Logout"
+                        style={{ padding: '7px 12px' }}
+                    >
+                        <LogOut size={15} /> <span className="hide-mobile">Logout</span>
+                    </button>
                 </div>
             </div>
             <div className="page-container"><div className="spinner" /></div>
@@ -87,13 +109,24 @@ export default function WorkerDashboard({ onMenuClick, auth }) {
                         <Menu size={22} />
                     </button>
                     <div>
-                        <div className="topbar-title">Hello, {auth.name}</div>
+                        <div className="topbar-title">Hello, {auth?.name}</div>
                         <div className="topbar-subtitle">Here are your assigned tasks</div>
                     </div>
                 </div>
-                <Link to="/new-order" className="btn btn-primary">
-                    <Plus size={16} /> <span className="hide-mobile">New Order</span>
-                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Link to="/new-order" className="btn btn-primary">
+                        <Plus size={16} /> <span className="hide-mobile">New Order</span>
+                    </Link>
+                    <button 
+                        type="button"
+                        className="btn btn-danger btn-sm" 
+                        onClick={handleLogout}
+                        title="Logout"
+                        style={{ padding: '7px 12px' }}
+                    >
+                        <LogOut size={15} /> <span className="hide-mobile">Logout</span>
+                    </button>
+                </div>
             </div>
 
             <div className="page-container">

@@ -3,7 +3,7 @@ const router = express.Router();
 const { db } = require('../db');
 
 // GET /api/dashboard
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
     try {
         // Use IST (UTC+5:30) for date comparisons since delivery dates are stored in Indian local time
         const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
@@ -73,7 +73,7 @@ router.get('/', async (req, res) => {
 
         res.json(result);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        next(err);
     }
 });
 

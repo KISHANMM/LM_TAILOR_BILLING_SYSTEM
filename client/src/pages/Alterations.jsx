@@ -26,10 +26,18 @@ function formatCurrency(val) {
     return '₹' + Number(val || 0).toLocaleString('en-IN');
 }
 
+function formatMonthDisplay(ymStr) {
+    if (!ymStr) return '—';
+    const [y, m] = ymStr.split('-');
+    const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+    return d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
 const PERIOD_LABELS = {
     today: 'Today',
     week: 'This Week',
     month: 'This Month',
+    prev_month: 'Previous Month',
     year: 'This Year',
 };
 
@@ -109,6 +117,46 @@ export default function Alterations({ onMenuClick }) {
             .finally(() => setLoading(false));
     }, []);
 
+    const monthlySummaries = React.useMemo(() => {
+        if (activePeriod !== 'prev_month') return [];
+        const groups = {};
+        records.forEach(row => {
+            const monthKey = row.date ? row.date.slice(0, 7) : 'Unknown';
+            if (!groups[monthKey]) {
+                groups[monthKey] = {
+                    month: monthKey,
+                    total_done: 0,
+                    total_amount: 0,
+                    entries: 0
+                };
+            }
+            groups[monthKey].total_done += Number(row.total_alterations || 0);
+            groups[monthKey].total_amount += Number(row.amount_received || 0);
+            groups[monthKey].entries += 1;
+        });
+        return Object.values(groups).sort((a, b) => b.month.localeCompare(a.month));
+    }, [records, activePeriod]);
+
+    const yearlySummaries = React.useMemo(() => {
+        if (activePeriod !== 'year') return [];
+        const groups = {};
+        records.forEach(row => {
+            const yearKey = row.date ? row.date.slice(0, 4) : 'Unknown';
+            if (!groups[yearKey]) {
+                groups[yearKey] = {
+                    year: yearKey,
+                    total_done: 0,
+                    total_amount: 0,
+                    entries: 0
+                };
+            }
+            groups[yearKey].total_done += Number(row.total_alterations || 0);
+            groups[yearKey].total_amount += Number(row.amount_received || 0);
+            groups[yearKey].entries += 1;
+        });
+        return Object.values(groups).sort((a, b) => b.year.localeCompare(a.year));
+    }, [records, activePeriod]);
+
     useEffect(() => {
         fetchDashboard();
     }, [fetchDashboard]);
@@ -169,7 +217,6 @@ export default function Alterations({ onMenuClick }) {
     const analyticsCards = dashboard ? [
         { label: 'Today', ...dashboard.today, accent: '#1565C0', bg: '#EBF3FF' },
         { label: 'This Week', ...dashboard.week, accent: '#6A1E2E', bg: '#FFF0F3' },
-        { label: 'This Month', ...dashboard.month, accent: '#E65100', bg: '#FFF3E0' },
         { label: 'This Year', ...dashboard.year, accent: '#2E7D32', bg: '#E8F5E9' },
     ] : [];
 
@@ -377,7 +424,7 @@ export default function Alterations({ onMenuClick }) {
                                     fontWeight: 700,
                                     fontFamily: 'var(--font-inter)'
                                 }}>
-                                    {records.length}
+                                    {activePeriod === 'year' ? yearlySummaries.length : activePeriod === 'prev_month' ? monthlySummaries.length : records.length}
                                 </span>
                                 {showTable ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                             </h3>
@@ -434,73 +481,169 @@ export default function Alterations({ onMenuClick }) {
                                         <thead>
                                             <tr>
                                                 <th style={{ width: 50 }}>SL.No</th>
-                                                <th>Date</th>
+                                                <th>{activePeriod === 'year' ? 'Year' : activePeriod === 'prev_month' ? 'Month' : 'Date'}</th>
                                                 <th>Total Alterations Done</th>
                                                 <th>Amount Received</th>
-                                                <th>Description</th>
-                                                <th style={{ width: 60 }}>Action</th>
+                                                <th>{(activePeriod === 'year' || activePeriod === 'prev_month') ? 'Total Entries' : 'Description'}</th>
+                                                {(activePeriod !== 'year' && activePeriod !== 'prev_month') && <th style={{ width: 60 }}>Action</th>}
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {records.map((row, idx) => (
-                                                <tr key={row.id}>
-                                                    <td style={{
-                                                        fontWeight: 700,
-                                                        color: 'var(--gray)',
-                                                        fontSize: 13,
-                                                        textAlign: 'center'
-                                                    }}>
-                                                        {idx + 1}
-                                                    </td>
-                                                    <td style={{ fontWeight: 600, fontSize: 13 }}>
-                                                        {formatDisplay(row.date)}
-                                                    </td>
-                                                    <td>
-                                                        <div style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 6,
-                                                            background: 'rgba(198,167,94,0.1)',
-                                                            border: '1px solid rgba(198,167,94,0.3)',
-                                                            borderRadius: 20,
-                                                            padding: '4px 14px',
-                                                            fontWeight: 800,
-                                                            fontSize: 15,
-                                                            color: 'var(--maroon-dark)',
-                                                            fontFamily: 'var(--font-serif)'
-                                                        }}>
-                                                            <Hash size={13} style={{ color: 'var(--gold-deep)' }} />
-                                                            {row.total_alterations}
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span style={{
+                                            {activePeriod === 'year' ? (
+                                                yearlySummaries.map((row, idx) => (
+                                                    <tr key={row.year}>
+                                                        <td style={{
                                                             fontWeight: 700,
-                                                            fontSize: 15,
-                                                            color: '#2E7D32',
-                                                            fontFamily: 'var(--font-serif)'
+                                                            color: 'var(--gray)',
+                                                            fontSize: 13,
+                                                            textAlign: 'center'
                                                         }}>
-                                                            {formatCurrency(row.amount_received)}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{
-                                                        fontSize: 13,
-                                                        color: row.description ? 'var(--charcoal)' : 'var(--gray)',
-                                                        fontStyle: row.description ? 'normal' : 'italic'
-                                                    }}>
-                                                        {row.description || 'No description'}
-                                                    </td>
-                                                    <td>
-                                                        <button
-                                                            onClick={() => handleDelete(row.id)}
-                                                            className="btn btn-danger btn-sm"
-                                                            title="Delete record"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                                            {idx + 1}
+                                                        </td>
+                                                        <td style={{ fontWeight: 700, fontSize: 15, color: 'var(--maroon-dark)' }}>
+                                                            {row.year}
+                                                        </td>
+                                                        <td>
+                                                            <div style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 6,
+                                                                background: 'rgba(198,167,94,0.1)',
+                                                                border: '1px solid rgba(198,167,94,0.3)',
+                                                                borderRadius: 20,
+                                                                padding: '4px 14px',
+                                                                fontWeight: 800,
+                                                                fontSize: 15,
+                                                                color: 'var(--maroon-dark)',
+                                                                fontFamily: 'var(--font-serif)'
+                                                            }}>
+                                                                <Hash size={13} style={{ color: 'var(--gold-deep)' }} />
+                                                                {row.total_done} alterations
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <span style={{
+                                                                fontWeight: 700,
+                                                                fontSize: 15,
+                                                                color: '#2E7D32',
+                                                                fontFamily: 'var(--font-serif)'
+                                                            }}>
+                                                                {formatCurrency(row.total_amount)}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ fontSize: 13, color: 'var(--gray)', fontWeight: 600 }}>
+                                                            {row.entries} {row.entries === 1 ? 'entry' : 'entries'}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : activePeriod === 'prev_month' ? (
+                                                monthlySummaries.map((row, idx) => (
+                                                    <tr key={row.month}>
+                                                        <td style={{
+                                                            fontWeight: 700,
+                                                            color: 'var(--gray)',
+                                                            fontSize: 13,
+                                                            textAlign: 'center'
+                                                        }}>
+                                                            {idx + 1}
+                                                        </td>
+                                                        <td style={{ fontWeight: 700, fontSize: 14, color: 'var(--maroon-dark)' }}>
+                                                            {formatMonthDisplay(row.month)}
+                                                        </td>
+                                                        <td>
+                                                            <div style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 6,
+                                                                background: 'rgba(198,167,94,0.1)',
+                                                                border: '1px solid rgba(198,167,94,0.3)',
+                                                                borderRadius: 20,
+                                                                padding: '4px 14px',
+                                                                fontWeight: 800,
+                                                                fontSize: 15,
+                                                                color: 'var(--maroon-dark)',
+                                                                fontFamily: 'var(--font-serif)'
+                                                            }}>
+                                                                <Hash size={13} style={{ color: 'var(--gold-deep)' }} />
+                                                                {row.total_done} alterations
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <span style={{
+                                                                fontWeight: 700,
+                                                                fontSize: 15,
+                                                                color: '#2E7D32',
+                                                                fontFamily: 'var(--font-serif)'
+                                                            }}>
+                                                                {formatCurrency(row.total_amount)}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ fontSize: 13, color: 'var(--gray)', fontWeight: 600 }}>
+                                                            {row.entries} {row.entries === 1 ? 'entry' : 'entries'}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                records.map((row, idx) => (
+                                                    <tr key={row.id}>
+                                                        <td style={{
+                                                            fontWeight: 700,
+                                                            color: 'var(--gray)',
+                                                            fontSize: 13,
+                                                            textAlign: 'center'
+                                                        }}>
+                                                            {idx + 1}
+                                                        </td>
+                                                        <td style={{ fontWeight: 600, fontSize: 13 }}>
+                                                            {formatDisplay(row.date)}
+                                                        </td>
+                                                        <td>
+                                                            <div style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 6,
+                                                                background: 'rgba(198,167,94,0.1)',
+                                                                border: '1px solid rgba(198,167,94,0.3)',
+                                                                borderRadius: 20,
+                                                                padding: '4px 14px',
+                                                                fontWeight: 800,
+                                                                fontSize: 15,
+                                                                color: 'var(--maroon-dark)',
+                                                                fontFamily: 'var(--font-serif)'
+                                                            }}>
+                                                                <Hash size={13} style={{ color: 'var(--gold-deep)' }} />
+                                                                {row.total_alterations}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <span style={{
+                                                                fontWeight: 700,
+                                                                fontSize: 15,
+                                                                color: '#2E7D32',
+                                                                fontFamily: 'var(--font-serif)'
+                                                            }}>
+                                                                {formatCurrency(row.amount_received)}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{
+                                                            fontSize: 13,
+                                                            color: row.description ? 'var(--charcoal)' : 'var(--gray)',
+                                                            fontStyle: row.description ? 'normal' : 'italic'
+                                                        }}>
+                                                            {row.description || 'No description'}
+                                                        </td>
+                                                        <td>
+                                                            <button
+                                                                onClick={() => handleDelete(row.id)}
+                                                                className="btn btn-danger btn-sm"
+                                                                title="Delete record"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
                                         </tbody>
 
                                         {/* Summary Footer Row */}
@@ -515,13 +658,28 @@ export default function Alterations({ onMenuClick }) {
                                                         TOTAL — {PERIOD_LABELS[activePeriod].toUpperCase()}
                                                     </td>
                                                     <td style={{ padding: '12px 16px', fontSize: 16, color: 'var(--gold)', fontFamily: 'var(--font-serif)' }}>
-                                                        {records.reduce((s, r) => s + Number(r.total_alterations || 0), 0)} alterations
+                                                        {activePeriod === 'year'
+                                                            ? `${yearlySummaries.reduce((s, r) => s + Number(r.total_done || 0), 0)} alterations`
+                                                            : activePeriod === 'prev_month'
+                                                                ? `${monthlySummaries.reduce((s, r) => s + Number(r.total_done || 0), 0)} alterations`
+                                                                : `${records.reduce((s, r) => s + Number(r.total_alterations || 0), 0)} alterations`
+                                                        }
                                                     </td>
                                                     <td style={{ padding: '12px 16px', fontSize: 16, color: 'var(--gold)', fontFamily: 'var(--font-serif)' }}>
-                                                        {formatCurrency(records.reduce((s, r) => s + Number(r.amount_received || 0), 0))}
+                                                        {activePeriod === 'year'
+                                                            ? formatCurrency(yearlySummaries.reduce((s, r) => s + Number(r.total_amount || 0), 0))
+                                                            : activePeriod === 'prev_month'
+                                                                ? formatCurrency(monthlySummaries.reduce((s, r) => s + Number(r.total_amount || 0), 0))
+                                                                : formatCurrency(records.reduce((s, r) => s + Number(r.amount_received || 0), 0))
+                                                        }
                                                     </td>
-                                                    <td colSpan={2} style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                                                        {records.length} entries
+                                                    <td colSpan={(activePeriod === 'year' || activePeriod === 'prev_month') ? 1 : 2} style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                                                        {activePeriod === 'year'
+                                                            ? `${yearlySummaries.reduce((s, r) => s + Number(r.entries || 0), 0)} entries`
+                                                            : activePeriod === 'prev_month'
+                                                                ? `${monthlySummaries.reduce((s, r) => s + Number(r.entries || 0), 0)} entries`
+                                                                : `${records.length} entries`
+                                                        }
                                                     </td>
                                                 </tr>
                                             </tfoot>

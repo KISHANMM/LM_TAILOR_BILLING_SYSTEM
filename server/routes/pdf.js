@@ -3,8 +3,44 @@ const router = express.Router();
 const PDFDocument = require('pdfkit');
 const { db } = require('../db');
 
+// Render a recycle-bin snapshot with the same bill PDF layout as active orders.
+router.get('/deleted/:id', async (req, res, next) => {
+    try {
+        const rs = await db.execute({ sql: "SELECT snapshot FROM deleted_orders WHERE id=? AND deleted_at > datetime('now', '-10 days', 'localtime')", args: [req.params.id] });
+        if (!rs.rows.length) return res.status(404).json({ error: 'Deleted bill not found or retention period expired' });
+        const snapshot = JSON.parse(rs.rows[0].snapshot);
+        const order = snapshot.order;
+        const services = snapshot.services || [];
+        const pageWidth = 419.53, margin = 40, contentW = pageWidth - margin * 2;
+        const height = Math.max(595.28, 400 + services.length * 20);
+        const doc = new PDFDocument({ margin, size: [pageWidth, height] });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="LM-Bill-${order.order_id}.pdf"`);
+        doc.pipe(res);
+        doc.fillColor('#4A1020').font('Helvetica-Bold').fontSize(18).text('L.M. LADIES TAILOR', margin, 42, { align: 'center', width: contentW });
+        doc.fillColor('#555').font('Helvetica').fontSize(9).text('BILL / ORDER RECEIPT', margin, 68, { align: 'center', width: contentW });
+        let y = 105;
+        const line = (label, value) => { doc.fillColor('#555').font('Helvetica').fontSize(9).text(label, margin, y); doc.fillColor('#222').font('Helvetica-Bold').text(String(value ?? '-'), margin + 115, y, { width: contentW - 115 }); y += 17; };
+        line('Bill No.', `#${String(order.order_id).padStart(4, '0')}`);
+        line('Customer', order.customer_name);
+        line('Phone', order.phone_number);
+        line('Booking Date', fmtDate(order.booking_date));
+        line('Delivery Date', fmtDate(order.delivery_date));
+        line('Status', order.status);
+        y += 8;
+        doc.rect(margin, y, contentW, 20).fill('#4A1020');
+        doc.fillColor('#fff').font('Helvetica-Bold').fontSize(8).text('SERVICE', margin + 7, y + 6).text('QTY', margin + 215, y + 6).text('PRICE', margin + 270, y + 6).text('AMOUNT', margin + 320, y + 6);
+        y += 24;
+        services.forEach(s => { const amount = Number(s.price || 0) * Number(s.quantity || 0); doc.fillColor('#222').font('Helvetica').fontSize(8).text(s.service_type, margin + 7, y, { width: 195 }).text(String(s.quantity), margin + 215, y).text(`Rs.${Number(s.price || 0).toFixed(2)}`, margin + 270, y).text(`Rs.${amount.toFixed(2)}`, margin + 320, y); y += 18; });
+        y += 12;
+        [['Total', order.total_amount], ['Advance Paid', order.advance_paid], ['Balance Due', order.balance_amount]].forEach(([label, amount]) => { doc.fillColor('#333').font('Helvetica-Bold').fontSize(9).text(label, margin + 205, y).text(`Rs.${Number(amount || 0).toFixed(2)}`, margin + 275, y, { width: 60, align: 'right' }); y += 18; });
+        if (order.notes) { y += 8; doc.fillColor('#555').font('Helvetica').fontSize(8).text(`Notes: ${order.notes}`, margin, y, { width: contentW }); }
+        doc.end();
+    } catch (err) { next(err); }
+});
+
 // GET /api/pdf/:orderId
-router.get('/:orderId', async (req, res) => {
+router.get('/:orderId', async (req, res, next) => {
     try {
         const orderRs = await db.execute({
             sql: `SELECT o.*, c.name as customer_name, c.phone_number
@@ -143,7 +179,7 @@ router.get('/:orderId', async (req, res) => {
         doc.end();
     } catch (err) {
         console.error('PDF error:', err);
-        if (!res.headersSent) res.status(500).json({ error: err.message });
+        if (!res.headersSent) next(err);
     }
 });
 

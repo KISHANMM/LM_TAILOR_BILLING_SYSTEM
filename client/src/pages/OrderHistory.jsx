@@ -1,13 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Search, Eye, Filter, RefreshCw, Menu, LayoutGrid, List, Edit2, Check, X, User, Trash2, AlertTriangle } from 'lucide-react';
 import api from '../api/axios';
 import { getOfflineOrders } from '../utils/offlineStore';
-
-function StatusBadge({ status }) {
-    const cls = { Pending: 'badge badge-pending', Ready: 'badge badge-ready', Delivered: 'badge badge-delivered' }[status] || 'badge';
-    return <span className={cls}>{status}</span>;
-}
 
 function formatDate(d) {
     if (!d) return '-';
@@ -28,11 +23,14 @@ export default function OrderHistory({ onMenuClick }) {
     const [viewMode, setViewMode] = useState(window.innerWidth <= 768 ? 'cards' : 'table');
     const [editingAdvanceId, setEditingAdvanceId] = useState(null);
     const [tempAdvanceValue, setTempAdvanceValue] = useState('');
+    const [showRecycleBin, setShowRecycleBin] = useState(false);
+    const [deletedOrders, setDeletedOrders] = useState([]);
+    const [deletedPdfUrls, setDeletedPdfUrls] = useState({});
 
     // Today's date string (YYYY-MM-DD) for overdue comparison
     const todayStr = new Date().toISOString().split('T')[0];
 
-    function fetchOrders() {
+    const fetchOrders = useCallback(() => {
         setLoading(true);
         const params = new URLSearchParams();
         // For Overdue, fetch all non-delivered orders then filter client-side
@@ -96,14 +94,40 @@ export default function OrderHistory({ onMenuClick }) {
             setOrders(combined);
         })
         .finally(() => setLoading(false));
-    }
+    }, [search, statusFilter, dateFilter, todayStr]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchOrders();
         }, 300);
         return () => clearTimeout(timer);
-    }, [search, statusFilter, dateFilter]);
+    }, [fetchOrders]);
+
+    const fetchDeletedOrders = useCallback(async () => {
+        try { const res = await api.get('/orders/deleted/list'); setDeletedOrders(res.data || []); }
+        catch (err) { console.error('Failed to load recycle bin:', err); }
+    }, []);
+    useEffect(() => { if (showRecycleBin) fetchDeletedOrders(); }, [showRecycleBin, fetchDeletedOrders]);
+    useEffect(() => {
+        let cancelled = false;
+        const openIds = deletedOrders.filter(item => item.expanded && !deletedPdfUrls[item.id]);
+        openIds.forEach(async item => {
+            try {
+                const response = await api.get(`/pdf/deleted/${item.id}`, { responseType: 'blob' });
+                const url = URL.createObjectURL(response.data);
+                if (cancelled) URL.revokeObjectURL(url);
+                else setDeletedPdfUrls(prev => ({ ...prev, [item.id]: url }));
+            } catch (error) { console.error('Failed to load archived bill PDF:', error); }
+        });
+        return () => { cancelled = true; };
+    }, [deletedOrders, deletedPdfUrls]);
+
+    async function handleRestore(deletedId) {
+        try {
+            await api.post(`/orders/deleted/${deletedId}/restore`);
+            await Promise.all([fetchDeletedOrders(), fetchOrders()]);
+        } catch (err) { alert(err.response?.data?.error || 'Failed to restore order.'); }
+    }
 
     async function handleStatusChange(orderId, newStatus) {
         // If marking as Delivered and balance is outstanding, ask about payment
@@ -122,18 +146,14 @@ export default function OrderHistory({ onMenuClick }) {
 
                 setUpdatingId(orderId);
                 try {
-                    await api.put(`/orders/${orderId}/status`, { status: newStatus });
-                    await api.put(`/orders/${orderId}`, {
-                        advance_paid: order.total_amount,
-                        services: order.services
-                    });
+                    const statusRes = await api.put(`/orders/${orderId}/status`, { status: newStatus });
                     const updated = orders.map(o => {
                         if (o.order_id === orderId) {
                             return {
                                 ...o,
                                 status: newStatus,
-                                advance_paid: order.total_amount,
-                                balance_amount: 0
+                                advance_paid: statusRes.data.advance_paid,
+                                balance_amount: statusRes.data.balance_amount
                             };
                         }
                         return o;
@@ -150,10 +170,10 @@ export default function OrderHistory({ onMenuClick }) {
 
         setUpdatingId(orderId);
         try {
-            await api.put(`/orders/${orderId}/status`, { status: newStatus });
+            const statusRes = await api.put(`/orders/${orderId}/status`, { status: newStatus });
             const updated = orders.map(o => {
                 if (o.order_id === orderId) {
-                    return { ...o, status: newStatus };
+                    return { ...o, status: newStatus, advance_paid: statusRes.data.advance_paid, balance_amount: statusRes.data.balance_amount };
                 }
                 return o;
             });
@@ -195,19 +215,19 @@ export default function OrderHistory({ onMenuClick }) {
         if (!window.confirm("Are you sure you want to delete this order?")) return;
         
         const pwd = window.prompt("Enter the Password :");
-        if (pwd !== "LataMagaji") {
-            alert("Incorrect password. Deletion aborted.");
-            return;
-        }
+        if (!pwd) return;
 
         setUpdatingId(orderId);
         try {
-            await api.delete(`/orders/${orderId}`);
+            const res = await api.delete(`/orders/${orderId}`, { data: { password: pwd } });
+            if (res.data?.success === false || res.data?.error) {
+                alert(res.data.error || "Incorrect password. Deletion aborted.");
+                return;
+            }
             setOrders(prev => prev.filter(o => o.order_id !== orderId));
-            alert("Order deleted successfully.");
+            alert(res.data.message || "Order deleted successfully.");
         } catch (err) {
-            console.error(err);
-            alert("Failed to delete order.");
+            alert(err.response?.data?.error || "Failed to delete order.");
         } finally {
             setUpdatingId(null);
         }
@@ -263,6 +283,9 @@ export default function OrderHistory({ onMenuClick }) {
                     </div>
                 </div>
                 <div className="flex gap-8" style={{ flexWrap: 'nowrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <button className={`btn btn-sm ${showRecycleBin ? 'btn-maroon' : 'btn-outline'}`} onClick={() => setShowRecycleBin(v => !v)}>
+                        <Trash2 size={14} /> <span className="hide-mobile">{showRecycleBin ? 'Order History' : `Recycle Bin (${deletedOrders.length})`}</span>
+                    </button>
                     <div className="flex gap-2 p-2" style={{ background: 'var(--gray-light)', borderRadius: 6, flexShrink: 0 }}>
                         <button
                             className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-ghost'}`}
@@ -288,6 +311,23 @@ export default function OrderHistory({ onMenuClick }) {
             </div>
 
             <div className="page-container">
+                {showRecycleBin ? (
+                    <div className="card"><div className="card-body">
+                        <h3 style={{ marginTop: 0 }}>Recycle Bin <small style={{ fontWeight: 400, color: 'var(--gray)' }}>Orders are kept for 10 days</small></h3>
+                        {deletedOrders.length === 0 ? <div className="empty-state">No deleted orders</div> : deletedOrders.map(item => (
+                            <div key={item.id} style={{ padding: '14px 0', borderBottom: '1px solid var(--gray-light)' }}>
+                                <div className="flex-between" style={{ gap: 12, flexWrap: 'wrap' }}>
+                                    <div><strong>#{String(item.order_id).padStart(4, '0')} · {item.order?.customer_name}</strong><div style={{ fontSize: 12, color: 'var(--gray)' }}>Deleted {formatDate(item.deleted_at)} · {item.order?.phone_number}</div></div>
+                                    <div className="flex gap-8">
+                                        <button className="btn btn-sm btn-outline" onClick={() => setDeletedOrders(prev => prev.map(row => row.id === item.id ? { ...row, expanded: !row.expanded } : row))}>{item.expanded ? 'Hide Details' : 'View Bill & Profile'}</button>
+                                        <button className="btn btn-sm btn-primary" onClick={() => handleRestore(item.id)}>Restore</button>
+                                    </div>
+                                </div>
+                                {item.expanded && (deletedPdfUrls[item.id] ? <iframe title={`Bill PDF ${item.order_id}`} src={`${deletedPdfUrls[item.id]}#toolbar=1&navpanes=0`} style={{ marginTop: 14, width: '100%', height: 700, border: '1px solid #ddd', borderRadius: 8, background: '#fff' }} /> : <div style={{ marginTop: 14, padding: 24, textAlign: 'center' }}>Loading bill PDF…</div>)}
+                            </div>
+                        ))}
+                    </div></div>
+                ) : <>
                 {/* Filters */}
                 <div className="card mb-24">
                     <div className="card-body" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -630,7 +670,7 @@ export default function OrderHistory({ onMenuClick }) {
                         </div>
                     )}
                 </div>
-
+                </>}
             </div>
         </div>
     );

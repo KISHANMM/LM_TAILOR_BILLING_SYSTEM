@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { DollarSign, Menu, Eye, Edit2, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -10,16 +10,16 @@ export default function Profits({ onMenuClick }) {
     const [editingId, setEditingId] = useState(null);
     const [editValue, setEditValue] = useState('');
 
-    useEffect(() => {
-        fetchOrders();
-    }, []);
-
-    const fetchOrders = () => {
+    const fetchOrders = useCallback(() => {
         api.get('/orders')
             .then(res => setOrders(res.data))
             .catch(console.error)
             .finally(() => setLoading(false));
-    };
+    }, []);
+
+    useEffect(() => {
+        fetchOrders();
+    }, [fetchOrders]);
 
     const handleSaveExpense = async (orderId) => {
         try {
@@ -27,7 +27,7 @@ export default function Profits({ onMenuClick }) {
             toast.success('Expense updated');
             setEditingId(null);
             fetchOrders();
-        } catch (err) {
+        } catch {
             toast.error('Failed to update expense');
         }
     };

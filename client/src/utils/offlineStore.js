@@ -106,3 +106,21 @@ export async function getWorkerTasksOffline() {
   const db = await initDB();
   return db.getAll('worker-tasks-cache');
 }
+
+export async function clearAllOfflineCaches() {
+  try {
+    const db = await initDB();
+    const stores = [ORDERS_STORE, CUSTOMERS_STORE, 'worker-tasks-cache'];
+    await Promise.all(
+      stores.map(storeName => {
+        if (db.objectStoreNames.contains(storeName)) {
+          return db.clear(storeName).catch(err => console.warn(`Could not clear store ${storeName}:`, err));
+        }
+        return Promise.resolve();
+      })
+    );
+  } catch (err) {
+    console.error('Error clearing offline DB:', err);
+  }
+}
+

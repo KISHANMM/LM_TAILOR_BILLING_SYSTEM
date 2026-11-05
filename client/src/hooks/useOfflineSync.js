@@ -18,7 +18,8 @@ export default function useOfflineSync() {
     window.addEventListener('offline', handleOffline);
 
     // Initial check on mount
-    if (navigator.onLine) {
+    const hasToken = !!localStorage.getItem('tailor_token');
+    if (navigator.onLine && hasToken) {
       syncOfflineOrders();
       syncCustomersForOffline();
     }
@@ -30,6 +31,8 @@ export default function useOfflineSync() {
   }, []);
 
   async function syncCustomersForOffline() {
+    const hasToken = !!localStorage.getItem('tailor_token');
+    if (!hasToken) return;
     try {
       const res = await api.get('/customers');
       if (res.data && res.data.length > 0) {
@@ -70,7 +73,7 @@ export default function useOfflineSync() {
           audio_data: audioData || undefined,
           recordingTime: recordingTime || undefined
         };
-        const orderRes = await api.post('/orders', finalOrderPayload);
+        await api.post('/orders', finalOrderPayload);
 
         // Delete from local queue after successful sync
         await removeOfflineOrder(order.id);

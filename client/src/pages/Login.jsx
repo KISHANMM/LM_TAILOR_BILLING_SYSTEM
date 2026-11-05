@@ -1,34 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Scissors, Lock, User, LogIn, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '../api/axios';
+import { clearAllOfflineCaches } from '../utils/offlineStore';
 
 export default function Login({ setAuth }) {
     const navigate = useNavigate();
     const [role, setRole] = useState('Admin'); // 'Admin' or 'Worker'
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-    const handleLogin = (e) => {
+    useEffect(() => {
+        clearAllOfflineCaches();
+    }, []);
+
+    const handleLogin = async (e) => {
         e.preventDefault();
+        setLoading(true);
 
-        if (role === 'Admin') {
-            if (password === 'LataMagaji') {
-                const user = { role: 'Admin', name: 'Lata' };
-                localStorage.setItem('tailor_auth', JSON.stringify(user));
-                setAuth(user);
-                toast.success('Welcome back, Admin!');
-                navigate('/');
-            } else {
-                toast.error('Incorrect password');
-            }
-        } else {
-            // Worker login is unrestricted for Praveen
-            const user = { role: 'Worker', name: 'Praveen' };
+        try {
+            const res = await api.post('/auth/login', { role, password });
+            const { token, user, message } = res.data;
+
+            localStorage.setItem('tailor_token', token);
             localStorage.setItem('tailor_auth', JSON.stringify(user));
             setAuth(user);
-            toast.success('Logged in as Praveen');
+            toast.success(message || 'Login successful!');
             navigate('/');
+        } catch (err) {
+            console.error('Login error:', err);
+            toast.error(err.response?.data?.error || 'Login failed');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -115,8 +120,8 @@ export default function Login({ setAuth }) {
                             </div>
                         )}
 
-                        <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-                            <LogIn size={18} style={{ marginRight: 8 }} /> Login
+                        <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
+                            <LogIn size={18} style={{ marginRight: 8 }} /> {loading ? 'Logging in...' : 'Login'}
                         </button>
                     </form>
                 </div>

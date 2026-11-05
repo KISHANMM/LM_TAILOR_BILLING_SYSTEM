@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, ChevronDown, User, Ruler, Scissors, CreditCard, Search, Menu, Image as ImageIcon, Camera, X, Mic, Square, Trash, PenTool, FolderOpen, Save } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, User, Ruler, Scissors, CreditCard, Search, Menu, Image as ImageIcon, Camera, X, Mic, Square, Trash, PenTool, FolderOpen, Save, BookUser } from 'lucide-react';
 import toast from 'react-hot-toast';
 import QRCode from 'react-qr-code';
 import api from '../api/axios';
@@ -52,6 +52,7 @@ const initialService = () => ({ service_type: 'Blouse', quantity: 1, price: '', 
 
 export default function NewOrder({ onMenuClick, auth }) {
     const navigate = useNavigate();
+    const isAdmin = auth?.role === 'Admin';
     const phoneRef = useRef();
 
     const [initialDraft] = useState(() => {
@@ -67,6 +68,9 @@ export default function NewOrder({ onMenuClick, auth }) {
     const [customer, setCustomer] = useState(initialDraft?.customer || { name: '', phone_number: '', notes: '' });
     const [customerId, setCustomerId] = useState(initialDraft?.customerId ?? null);
     const [customerFound, setCustomerFound] = useState(initialDraft?.customerFound ?? false);
+    const [walletBalance, setWalletBalance] = useState(0);  // customer's available wallet balance
+    const [useWallet, setUseWallet] = useState(false);       // toggle
+    const [walletRedeem, setWalletRedeem] = useState('');    // amount to redeem
 
     // Dates & Assignment
     const [bookingDate, setBookingDate] = useState(today); // Always default to today to prevent stale dates from drafts
@@ -262,6 +266,9 @@ export default function NewOrder({ onMenuClick, auth }) {
         setImages([]);
         setAdvancePaid('');
         setPaymentMethod('Cash');
+        setWalletBalance(0);
+        setUseWallet(false);
+        setWalletRedeem('');
         clearAudio();
         setActiveDraftId(null);
         if (skipConfirm !== true) {
@@ -285,10 +292,12 @@ export default function NewOrder({ onMenuClick, auth }) {
     }, 0);
 
     const advance = parseFloat(advancePaid) || 0;
-    const balance = totalAmount - advance;
+    const maxRedeemable = Math.min(walletBalance, 200);
+    const walletUsed = (isAdmin && useWallet) ? Math.min(parseFloat(walletRedeem) || maxRedeemable, maxRedeemable, totalAmount - advance) : 0;
+    const balance = totalAmount - advance - walletUsed;
 
     // ── Customer lookup ───────────────────────────────
-    async function handlePhoneSearch(isAuto = false) {
+    const handlePhoneSearch = useCallback(async (isAuto = false) => {
         if (!customer.phone_number || customer.phone_number.length < 10) {
             if (!isAuto) toast.error('Enter a valid 10-digit phone number');
             return;
@@ -301,6 +310,15 @@ export default function NewOrder({ onMenuClick, auth }) {
                 setCustomerId(found.id);
                 setCustomer({ name: found.name, phone_number: found.phone_number, notes: '' });
                 setCustomerFound(true);
+                // Fetch wallet balance (Admin only)
+                if (isAdmin) {
+                    try {
+                        const walRes = await api.get(`/customers/${found.id}/wallet`);
+                        setWalletBalance(walRes.data.wallet_balance || 0);
+                    } catch { setWalletBalance(0); }
+                } else {
+                    setWalletBalance(0);
+                }
                 // Prefill measurements
                 const m = {};
                 ALL_MEASUREMENT_KEYS.forEach(k => { 
@@ -313,7 +331,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                             ? JSON.parse(found.extra_measurements)
                             : found.extra_measurements;
                         setExtraMeasurements(Array.isArray(parsed) ? parsed : []);
-                    } catch (e) {
+                    } catch {
                         setExtraMeasurements([]);
                     }
                 } else {
@@ -330,7 +348,7 @@ export default function NewOrder({ onMenuClick, auth }) {
         } finally {
             setSearchLoading(false);
         }
-    }
+    }, [customer.phone_number, isAdmin]);
 
     // Auto-search when 10 digits are entered
     useEffect(() => {
@@ -345,7 +363,7 @@ export default function NewOrder({ onMenuClick, auth }) {
             // Optional: reset name if it was prefilled and now user is typing a new number
             // setCustomer(c => ({ ...c, name: '' }));
         }
-    }, [customer.phone_number, customerFound]);
+    }, [customer.phone_number, customerFound, handlePhoneSearch]);
 
     // ── Service helpers ───────────────────────────────
     function addService() { setServices(s => [...s, initialService()]); }
@@ -394,7 +412,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                     return prev + 1;
                 });
             }, 1000);
-        } catch (err) {
+        } catch {
             toast.error('Microphone access denied or unavailable');
         }
     };
@@ -403,6 +421,31 @@ export default function NewOrder({ onMenuClick, auth }) {
         setAudioBlob(null);
         setAudioUrl(null);
         setRecordingTime(0);
+    };
+
+    // ── Contact Picker ────────────────────────────
+    const isContactPickerSupported = 'contacts' in navigator && 'ContactsManager' in window;
+
+    const importFromContacts = async () => {
+        if (!isContactPickerSupported) {
+            toast('Contact import is not supported on this browser.\nUse Android Chrome for this feature.', { icon: 'ℹ️', duration: 4000 });
+            return;
+        }
+        try {
+            const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+            if (contacts && contacts.length > 0) {
+                const { name, tel } = contacts[0];
+                const rawPhone = (tel?.[0] || '').replace(/[\s\-()]/g, '').replace(/^(\+91|0)/, '');
+                setCustomer(c => ({
+                    ...c,
+                    name: name?.[0] || c.name,
+                    phone_number: rawPhone.slice(-10),
+                }));
+                toast.success('Contact imported!');
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') toast.error('Could not access contacts');
+        }
     };
 
     const blobToBase64 = (blob) => {
@@ -440,7 +483,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                     ctx.drawImage(img, 0, 0, width, height);
 
                     const base64Str = canvas.toDataURL('image/jpeg', 0.7);
-                    setImages(prev => [...prev, base64Str]);
+                    setImages(prev => [...prev, { data: base64Str, type: 'photo' }]);
                 };
             };
         });
@@ -452,7 +495,7 @@ export default function NewOrder({ onMenuClick, auth }) {
     };
 
     const handleScratchSave = (base64) => {
-        setImages(prev => [...prev, base64]);
+        setImages(prev => [...prev, { data: base64, type: 'drawing' }]);
         toast.success('Sketch saved and added to images');
     };
 
@@ -508,6 +551,7 @@ export default function NewOrder({ onMenuClick, auth }) {
             services: svcList,
             assigned_worker: assignedWorker,
             payment_method: paymentMethod,
+            wallet_redeemed: (isAdmin && useWallet) ? Math.min(parseFloat(walletRedeem) || Math.min(walletBalance, 200), Math.min(walletBalance, 200), totalAmount - advance) : 0,
         };
 
         if (isOffline) {
@@ -534,7 +578,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                 } else {
                     navigate(`/bill/offline-${insertId}`);
                 }
-            } catch (err) {
+            } catch {
                 toast.error('Failed to save offline order');
             } finally {
                 setLoading(false);
@@ -543,30 +587,58 @@ export default function NewOrder({ onMenuClick, auth }) {
             return;
         }
 
+
         setLoading(true);
         try {
-            const audioData = audioBlob ? await blobToBase64(audioBlob) : null;
-            
-            const finalPayload = {
+            // ── OPTIMIZATION: Start audio conversion in parallel with API call prep ──
+            const audioPromise = audioBlob ? blobToBase64(audioBlob) : Promise.resolve(null);
+
+            // ── Phase 1: Send LIGHTWEIGHT order (no images/audio) for fast response ──
+            const corePayload = {
                 ...orderPayload,
                 customer_id: customerId,
                 customer: !customerId ? { name: customer.name, phone_number: customer.phone_number } : undefined,
                 measurements: Object.keys(measPayload).length > 0 ? measPayload : undefined,
-                images: images.length > 0 ? images : undefined,
-                audio_data: audioData,
-                recordingTime: audioBlob ? recordingTime : undefined
+                // Images & audio are sent AFTER the order is created (Phase 2)
             };
 
-            const orderRes = await api.post('/orders', finalPayload);
+            const orderRes = await api.post('/orders', corePayload);
             const createdOrderId = orderRes.data.order_id;
 
             toast.success('Order created successfully!');
             localStorage.removeItem('newOrderDraft');
             deleteActiveDraft();
+
+            // Navigate IMMEDIATELY — don't wait for media upload
             if (auth?.role === 'Worker') {
                 navigate('/');
             } else {
                 navigate(`/bill/${createdOrderId}`);
+            }
+
+            // ── Phase 2: Upload images & audio in background (non-blocking) ──
+            const hasMedia = (images.length > 0) || audioBlob;
+            if (hasMedia) {
+                (async () => {
+                    try {
+                        const bgBatch = [];
+                        // Upload images
+                        if (images.length > 0) {
+                            bgBatch.push(api.post(`/orders/${createdOrderId}/images`, { images }));
+                        }
+                        // Upload audio (wait for conversion that started earlier)
+                        const audioData = await audioPromise;
+                        if (audioData) {
+                            bgBatch.push(api.post(`/orders/${createdOrderId}/voice-notes`, {
+                                audio_data: audioData,
+                                duration: recordingTime || null
+                            }));
+                        }
+                        await Promise.allSettled(bgBatch);
+                    } catch (bgErr) {
+                        console.warn('[Background media upload] Non-critical error:', bgErr.message);
+                    }
+                })();
             }
         } catch (err) {
             console.error('Order creation failed:', err);
@@ -681,6 +753,15 @@ export default function NewOrder({ onMenuClick, auth }) {
                                             required
                                         />
                                     </div>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline"
+                                        onClick={importFromContacts}
+                                        title="Import from phone contacts"
+                                        style={{ color: 'var(--maroon)', borderColor: 'var(--maroon)', whiteSpace: 'nowrap' }}
+                                    >
+                                        <BookUser size={16} /> <span className="hide-mobile">Import</span>
+                                    </button>
                                     <button type="button" className="btn btn-outline" onClick={handlePhoneSearch} disabled={searchLoading}>
                                         <Search size={16} /> {searchLoading ? 'Searching…' : 'Search'}
                                     </button>
@@ -832,7 +913,7 @@ export default function NewOrder({ onMenuClick, auth }) {
                                         </button>
                                     </div>
 
-                                    {extraMeasurements.map((extra, idx) => (
+                                    {extraMeasurements.map((extra) => (
                                         <div key={extra.id} className="card mb-16" style={{ background: 'var(--ivory)', border: '1px solid var(--gold-pale)', padding: 16 }}>
                                             <div className="flex-between mb-12 extra-meas-header" style={{ flexWrap: 'wrap', gap: 12 }}>
                                                 <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -1039,9 +1120,9 @@ export default function NewOrder({ onMenuClick, auth }) {
                             <p style={{ fontSize: 12, color: 'var(--gray)', marginTop: 4 }}>Images are automatically compressed to save space.</p>
                             {images.length > 0 && (
                                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                                    {images.map((src, i) => (
+                                    {images.map((img, i) => (
                                         <div key={i} style={{ position: 'relative', width: 100, height: 100, border: '1px solid var(--gray-light)', borderRadius: 8, overflow: 'hidden' }}>
-                                            <img src={src} alt="Design preview" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} onClick={() => setSelectedImage(src)} />
+                                            <img src={typeof img === 'object' ? img.data : img} alt="Design preview" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} onClick={() => setSelectedImage(typeof img === 'object' ? img.data : img)} />
                                             <button
                                                 type="button"
                                                 onClick={() => removeImage(i)}
@@ -1064,6 +1145,50 @@ export default function NewOrder({ onMenuClick, auth }) {
                         <div className="card-body">
                             <div className="grid-2">
                                 <div>
+                                {/* Wallet Banner (Admin only) */}
+                                {isAdmin && customerFound && walletBalance > 0 && (
+                                    <div style={{ marginBottom: 16, background: 'linear-gradient(135deg, #E8F5E9, #F1F8E9)', border: '1px solid #A5D6A7', borderRadius: 10, padding: '12px 14px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span style={{ fontSize: 20 }}>🪙</span>
+                                                <div>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#2E7D32' }}>Loyalty Wallet</div>
+                                                    <div style={{ fontSize: 12, color: '#388E3C' }}>
+                                                        Available: <strong>₹{walletBalance.toFixed(2)}</strong>
+                                                        {walletBalance > 200 && <span style={{ fontSize: 11, color: '#2E7D32', marginLeft: 4 }}>(Max ₹200 per order)</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={useWallet}
+                                                    onChange={e => { setUseWallet(e.target.checked); if (!e.target.checked) setWalletRedeem(''); }}
+                                                    style={{ width: 16, height: 16, accentColor: '#2E7D32', cursor: 'pointer' }}
+                                                />
+                                                <span style={{ fontSize: 13, fontWeight: 600, color: '#2E7D32' }}>Redeem</span>
+                                            </label>
+                                        </div>
+                                        {useWallet && (
+                                            <div style={{ marginTop: 10 }}>
+                                                <label className="form-label" style={{ fontSize: 11, color: '#388E3C' }}>Redeem Amount (₹)</label>
+                                                <div className="input-prefix">
+                                                    <span className="prefix-symbol" style={{ color: '#2E7D32' }}>₹</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max={Math.min(walletBalance, 200)}
+                                                        step="0.01"
+                                                        value={walletRedeem}
+                                                        onChange={e => setWalletRedeem(e.target.value)}
+                                                        placeholder={`Max ₹${Math.min(walletBalance, 200).toFixed(2)}`}
+                                                        style={{ borderColor: '#A5D6A7' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                                     <div className="form-group">
                                         <label className="form-label">Advance Paid (₹)</label>
                                         <div className="input-prefix">
@@ -1087,9 +1212,13 @@ export default function NewOrder({ onMenuClick, auth }) {
                                             onChange={e => setPaymentMethod(e.target.value)}
                                             style={{ width: '100%', padding: '10px 12px', borderRadius: '8px' }}
                                         >
-                                            <option value="Cash">Cash</option>
-                                            <option value="PhonePe">PhonePe</option>
+                                            <option value="Cash">💵 Cash</option>
+                                            <option value="PhonePe">📱 PhonePe (Static QR)</option>
                                         </select>
+
+                                        {/* ── Razorpay QR is shown as full-screen modal at root level (see below) ── */}
+
+                                        {/* ── Legacy PhonePe static QR ── */}
                                         {paymentMethod === 'PhonePe' && advance > 0 && (
                                             <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid var(--gray-light)' }}>
                                                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--maroon)', marginBottom: 8, textAlign: 'center' }}>
@@ -1117,6 +1246,12 @@ export default function NewOrder({ onMenuClick, auth }) {
                                             <span style={{ color: 'var(--gray)', fontSize: 13 }}>Advance Paid</span>
                                             <span style={{ color: '#2E7D32', fontWeight: 600 }}>₹{advance.toFixed(2)}</span>
                                         </div>
+                                        {isAdmin && walletUsed > 0 && (
+                                            <div className="flex-between" style={{ padding: '6px 0', borderBottom: '1px dashed var(--gold-pale)' }}>
+                                                <span style={{ color: '#2E7D32', fontSize: 13 }}>🪙 Wallet Discount</span>
+                                                <span style={{ color: '#2E7D32', fontWeight: 600 }}>- ₹{walletUsed.toFixed(2)}</span>
+                                            </div>
+                                        )}
                                         <div className="flex-between" style={{ padding: '10px 0 0' }}>
                                             <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--maroon-dark)' }}>Balance Due</span>
                                             <strong style={{ fontSize: 18, color: balance > 0 ? '#E65100' : '#2E7D32' }}>
@@ -1148,6 +1283,8 @@ export default function NewOrder({ onMenuClick, auth }) {
                     onClose={() => setShowScratchPad(false)} 
                 />
             )}
+
+
 
             {/* Fullscreen Image Modal */}
             {selectedImage && (

@@ -801,6 +801,17 @@ tfoot tr td {
   100% { background-position: -200% 0; }
 }
 
+/* Razorpay QR animations */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+@keyframes scan {
+  0%   { top: 0; opacity: 1; }
+  50%  { opacity: 0.6; }
+  100% { top: 100%; opacity: 0; }
+}
+
 .skeleton-text  { height: 14px; margin-bottom: 8px; border-radius: var(--radius-sm); }
 .skeleton-title { height: 22px; width: 60%; margin-bottom: 12px; }
 .skeleton-card  { height: 100px; border-radius: var(--radius-lg); }

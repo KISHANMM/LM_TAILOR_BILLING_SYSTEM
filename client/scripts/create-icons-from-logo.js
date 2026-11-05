@@ -1,5 +1,4 @@
 import sharp from 'sharp';
-import fs from 'fs';
 
 const sourceImg = 'C:\\Users\\Kishan\\.gemini\\antigravity\\brain\\26d67cd2-4480-4dd2-9f67-776a8262af2e\\lm_tailor_logo_1772811187435.png';
 

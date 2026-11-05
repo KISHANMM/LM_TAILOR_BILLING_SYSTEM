@@ -3,7 +3,7 @@ const router = express.Router();
 const { db } = require('../db');
 
 // GET /api/customers
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
     try {
         const query = `
             SELECT c.*, m.length as m_length, m.shoulder, m.chest, m.waist, m.dot,
@@ -16,12 +16,12 @@ router.get('/', async (req, res) => {
         const rs = await db.execute(query);
         res.json(rs.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        next(err);
     }
 });
 
 // GET /api/customers/search?phone=... or ?name=...
-router.get('/search', async (req, res) => {
+router.get('/search', async (req, res, next) => {
     try {
         const { phone, name } = req.query;
         let query, param;
@@ -49,7 +49,7 @@ router.get('/search', async (req, res) => {
         const rs = await db.execute({ sql: query, args: [param] });
         res.json(rs.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        next(err);
     }
 });
 
@@ -78,7 +78,7 @@ router.get('/:id', async (req, res) => {
 
         res.json({ ...customer, orders: ordersRs.rows });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        next(err);
     }
 });
 
@@ -147,7 +147,7 @@ async function upsertMeasurements(customerId, measurements) {
 }
 
 // POST /api/customers
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
     try {
         const { name, phone_number, measurements } = req.body;
         if (!name || !phone_number) return res.status(400).json({ error: 'Name and phone number required' });
@@ -177,7 +177,7 @@ router.post('/', async (req, res) => {
         });
         res.status(201).json(rowRs.rows[0]);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        next(err);
     }
 });
 
@@ -187,7 +187,7 @@ router.put('/:id/measurements', async (req, res) => {
         await upsertMeasurements(req.params.id, req.body);
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        next(err);
     }
 });
 
@@ -214,7 +214,35 @@ router.put('/:id', async (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        next(err);
+    }
+});
+
+// GET /api/customers/:id/wallet — wallet balance + transaction history
+router.get('/:id/wallet', async (req, res, next) => {
+    try {
+        const expired = await db.execute({ sql: `SELECT customer_id, SUM(remaining_amount) AS amount FROM wallet_credit_balances WHERE customer_id=? AND remaining_amount>0 AND expires_at<=datetime('now','localtime') GROUP BY customer_id`, args: [req.params.id] });
+        if (expired.rows.length) {
+            await db.execute({ sql: 'UPDATE customers SET wallet_balance=MAX(0,wallet_balance-?) WHERE id=?', args: [expired.rows[0].amount, req.params.id] });
+            await db.execute({ sql: `UPDATE wallet_credit_balances SET remaining_amount=0 WHERE customer_id=? AND expires_at<=datetime('now','localtime')`, args: [req.params.id] });
+        }
+        const custRs = await db.execute({
+            sql: 'SELECT id, name, wallet_balance FROM customers WHERE id = ?',
+            args: [req.params.id]
+        });
+        if (custRs.rows.length === 0) return res.status(404).json({ error: 'Customer not found' });
+
+        const txRs = await db.execute({
+            sql: 'SELECT * FROM wallet_transactions WHERE customer_id = ? ORDER BY created_at DESC',
+            args: [req.params.id]
+        });
+
+        res.json({
+            wallet_balance: custRs.rows[0].wallet_balance || 0,
+            transactions: txRs.rows
+        });
+    } catch (err) {
+        next(err);
     }
 });
 

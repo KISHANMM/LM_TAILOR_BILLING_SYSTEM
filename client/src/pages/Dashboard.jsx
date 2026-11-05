@@ -8,11 +8,11 @@ import {
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 
-function StatCard({ value, label, icon: Icon, colorClass, iconBg, iconColor }) {
+function StatCard({ value, label, icon: IconComponent, colorClass, iconBg, iconColor }) {
     return (
         <div className={`stat-card ${colorClass}`} style={{ height: '100%', minHeight: '140px', display: 'flex', flexDirection: 'column' }}>
             <div className="stat-icon" style={{ background: iconBg }}>
-                <Icon size={20} color={iconColor} />
+                {React.createElement(IconComponent, { size: 20, color: iconColor })}
             </div>
             <div className="stat-value" style={{ flexGrow: 1 }}>{value ?? 0}</div>
             <div className="stat-label">{label}</div>
@@ -38,7 +38,6 @@ export default function Dashboard({ onMenuClick }) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('dueToday'); // 'dueToday', 'pending', 'ready', 'dueTomorrow', 'overdue'
-    const notifiedRef = React.useRef(false);
 
     useEffect(() => {
         api.get('/dashboard')
@@ -319,11 +318,11 @@ export default function Dashboard({ onMenuClick }) {
                                     { icon: ShoppingBag, color: 'var(--maroon)', label: 'Total Orders', val: data?.totalOrders },
                                     { icon: DollarSign, color: '#2E7D32', label: 'Advance Collected', val: `\u20b9${(data?.totalAdvance || 0).toLocaleString('en-IN')}` },
                                     { icon: AlertTriangle, color: '#E65100', label: 'Overdue', val: data?.overdueCount },
-                                ].map(({ icon: Ic, color, label, val }, i) => (
-                                    <div key={i} className="flex-between" style={{ padding: '8px 0', borderBottom: i < 3 ? '1px solid var(--gray-light)' : 'none', cursor: label === 'Overdue' ? 'pointer' : 'default' }}
-                                        onClick={() => label === 'Overdue' ? setActiveTab('overdue') : null}>
-                                        <span className="flex gap-8"><Ic size={15} color={color} />{label}</span>
-                                        <strong>{val}</strong>
+                                ].map((item, i) => (
+                                    <div key={i} className="flex-between" style={{ padding: '8px 0', borderBottom: i < 3 ? '1px solid var(--gray-light)' : 'none', cursor: item.label === 'Overdue' ? 'pointer' : 'default' }}
+                                        onClick={() => item.label === 'Overdue' ? setActiveTab('overdue') : null}>
+                                        <span className="flex gap-8"><item.icon size={15} color={item.color} />{item.label}</span>
+                                        <strong>{item.val}</strong>
                                     </div>
                                 ))}
                             </div>

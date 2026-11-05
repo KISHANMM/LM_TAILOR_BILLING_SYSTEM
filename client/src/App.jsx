@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
-import { Toaster, toast } from 'react-hot-toast';
+import { Toaster } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
 import NewOrder from './pages/NewOrder';
 import CustomerSearch from './pages/CustomerSearch';
@@ -16,6 +16,7 @@ import EditOrder from './pages/EditOrder';
 import './index.css';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import useOfflineSync from './hooks/useOfflineSync';
+import { clearAllOfflineCaches } from './utils/offlineStore';
 import { WifiOff, RefreshCw } from 'lucide-react';
 
 function OfflineBannerWrapper({ isOnline, isSyncing, syncOfflineOrders }) {
@@ -24,11 +25,15 @@ function OfflineBannerWrapper({ isOnline, isSyncing, syncOfflineOrders }) {
 
   useEffect(() => {
     if (!isOnline) {
-      setShow(true);
-      const timer = setTimeout(() => setShow(false), 2000);
-      return () => clearTimeout(timer);
+      const showTimer = setTimeout(() => setShow(true), 0);
+      const hideTimer = setTimeout(() => setShow(false), 2000);
+      return () => {
+        clearTimeout(showTimer);
+        clearTimeout(hideTimer);
+      };
     } else {
-      setShow(false);
+      const hideTimer = setTimeout(() => setShow(false), 0);
+      return () => clearTimeout(hideTimer);
     }
   }, [location.pathname, isOnline]);
 
@@ -47,14 +52,23 @@ function OfflineBannerWrapper({ isOnline, isSyncing, syncOfflineOrders }) {
 }
 
 export default function App() {
-  const [sidebarOpen, useState_sidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [auth, setAuth] = useState(() => {
     const saved = localStorage.getItem('tailor_auth');
-    try { return saved ? JSON.parse(saved) : null; } catch { return null; }
+    const token = localStorage.getItem('tailor_token');
+    if (!saved || !token) return null;
+    try { return JSON.parse(saved); } catch { return null; }
   });
+
+  useEffect(() => {
+    if (!auth) {
+      clearAllOfflineCaches();
+    }
+  }, [auth]);
+
   const {
-    needRefresh: [needRefresh, setNeedRefresh],
-    updateServiceWorker,
+    needRefresh: [_needRefresh, _setNeedRefresh],
+    updateServiceWorker: _updateServiceWorker,
   } = useRegisterSW();
 
   const { isOnline, isSyncing, syncOfflineOrders } = useOfflineSync();
@@ -71,8 +85,8 @@ export default function App() {
   }
 
   const isAdmin = auth.role === 'Admin';
-  const toggleSidebar = () => useState_sidebarOpen(!sidebarOpen);
-  const closeSidebar = () => useState_sidebarOpen(false);
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+  const closeSidebar = () => setSidebarOpen(false);
 
   return (
     <BrowserRouter>
@@ -86,7 +100,7 @@ export default function App() {
 
         <main className="main-content">
           <Routes>
-            <Route path="/" element={isAdmin ? <Dashboard onMenuClick={toggleSidebar} /> : <WorkerDashboard onMenuClick={toggleSidebar} auth={auth} />} />
+            <Route path="/" element={isAdmin ? <Dashboard onMenuClick={toggleSidebar} /> : <WorkerDashboard onMenuClick={toggleSidebar} auth={auth} setAuth={setAuth} />} />
             <Route path="/new-order" element={<NewOrder onMenuClick={toggleSidebar} auth={auth} />} />
             <Route path="/customer/:id" element={<CustomerSearch onMenuClick={toggleSidebar} auth={auth} />} />
 

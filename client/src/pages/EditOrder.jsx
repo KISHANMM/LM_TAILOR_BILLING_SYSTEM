@@ -66,7 +66,8 @@ export default function EditOrder({ onMenuClick }) {
         return s + qty * price;
     }, 0);
     const advance = parseFloat(advancePaid) || 0;
-    const balance = totalAmount - advance;
+    const walletUsed = parseFloat(order?.wallet_redeemed) || 0;
+    const balance = Math.max(0, totalAmount - advance - walletUsed);
 
     // ── Submit ────────────────────────────────────────
     async function handleSave(e) {
@@ -392,6 +393,12 @@ export default function EditOrder({ onMenuClick }) {
                                     <span style={{ color: '#81C784', fontSize: 13 }}>Advance Paid</span>
                                     <span style={{ color: '#81C784', fontWeight: 600 }}>₹{advance.toLocaleString('en-IN')}</span>
                                 </div>
+                                {walletUsed > 0 && (
+                                    <div className="flex-between" style={{ marginBottom: 8 }}>
+                                        <span style={{ color: '#81C784', fontSize: 13 }}>🪙 Loyalty Wallet</span>
+                                        <span style={{ color: '#81C784', fontWeight: 600 }}>- ₹{walletUsed.toLocaleString('en-IN')}</span>
+                                    </div>
+                                )}
                                 <div style={{ borderTop: '1px solid rgba(198,167,94,0.2)', paddingTop: 8 }} className="flex-between">
                                     <span style={{ color: '#fff', fontWeight: 700 }}>Balance Due</span>
                                     <strong style={{

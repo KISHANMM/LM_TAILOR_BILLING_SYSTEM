@@ -14,17 +14,42 @@ lm-tailor-*.json
 # Local project context (contains credentials)
 project_context.md
 
-# Backups
+# Backups & data exports
 *.csv
 *backup*.json
 *backup*.xml
 *.xlsx
 ~$*.xlsx
+customer_*.json
 
-# Local Documentation & Resumes
+# Log files — never commit these (may contain customer data)
+*.log
+logs/
+
+# Temporary debug / test / migration scripts
+server/check-*.js
+server/test-*.js
+server/test_*.json
+server/clear-*.js
+server/restore-*.js
+server/migrate-*.js
+server/export-*.js
+server/sync-*.js
+server/update-csv-backup.js
+server/backup-turso.js
+server/bckup.xlsx
+server/out.log
+server/orders_debug.log
+
+# PDFs (resumes etc)
+*.pdf
+
+# Local Documentation
 future_features.txt
 interview_questions.md
 about_project.md
 update_new.txt
+LENGTH_FIELD_REFERENCE.txt
+TECHNICAL_DOCUMENTATION_*.txt
 *resume*
 server/export-cloud-backup.js

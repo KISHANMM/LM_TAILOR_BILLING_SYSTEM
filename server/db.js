@@ -2,11 +2,11 @@ const { createClient } = require('@libsql/client');
 const path = require('path');
 require('dotenv').config();
 
-// If DATABASE_URL starts with 'libsql://', it's Cloud (Turso)
-// If it's empty, we use a local file
-// For local development, use a simple file name
-// For cloud, use the full libsql:// URL
-const url = process.env.DATABASE_URL || "file:./lm_tailor.db";
+let rawUrl = process.env.DATABASE_URL || "file:./lm_tailor.db";
+if (!rawUrl.startsWith('libsql://') && !rawUrl.startsWith('http://') && !rawUrl.startsWith('https://') && !rawUrl.startsWith('file:')) {
+    rawUrl = `file:${rawUrl}`;
+}
+const url = rawUrl;
 const isLocal = url.startsWith('file:');
 
 console.log('🔗 Connecting to:', url);
@@ -24,8 +24,27 @@ async function initDB() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         phone_number TEXT NOT NULL UNIQUE,
+        wallet_balance REAL NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
       )`,
+      `CREATE TABLE IF NOT EXISTS wallet_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        order_id INTEGER,
+        type TEXT NOT NULL CHECK(type IN ('CREDIT', 'DEBIT')),
+        amount REAL NOT NULL,
+        description TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+        FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE SET NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS wallet_credit_balances (
+        credit_id INTEGER PRIMARY KEY,
+        customer_id INTEGER NOT NULL,
+        remaining_amount REAL NOT NULL DEFAULT 0,
+        expires_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_wallet_customer ON wallet_transactions(customer_id)`,
       `CREATE TABLE IF NOT EXISTS measurements (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER NOT NULL,
@@ -53,6 +72,7 @@ async function initDB() {
         total_amount REAL NOT NULL DEFAULT 0,
         advance_paid REAL NOT NULL DEFAULT 0,
         balance_amount REAL NOT NULL DEFAULT 0,
+        wallet_redeemed REAL NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN ('Pending', 'Ready', 'Delivered')),
         measurement_type TEXT NOT NULL DEFAULT 'Body',
         notes TEXT,
@@ -60,6 +80,13 @@ async function initDB() {
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
         FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
       )`,
+      `CREATE TABLE IF NOT EXISTS deleted_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        deleted_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        snapshot TEXT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_deleted_orders_deleted_at ON deleted_orders(deleted_at)`,
       `CREATE TABLE IF NOT EXISTS services (
         service_id INTEGER PRIMARY KEY AUTOINCREMENT,
         order_id INTEGER NOT NULL,
@@ -105,6 +132,7 @@ async function initDB() {
       `CREATE INDEX IF NOT EXISTS idx_orders_delivery_date ON orders(delivery_date)`,
       `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`,
       `CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_orders_dup_guard ON orders(customer_id, delivery_date, total_amount, created_at)`,
       `CREATE INDEX IF NOT EXISTS idx_services_order_id ON services(order_id)`,
       `CREATE INDEX IF NOT EXISTS idx_services_service_type ON services(service_type)`,
       `CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)`,
@@ -213,7 +241,42 @@ async function initDB() {
       console.log('✅ Unique index on measurements(customer_id) ensured');
     } catch (e) { console.log('ℹ️ Measurement unique index skipped:', e.message); }
 
+    // Add wallet_balance to existing customers tables
+    try {
+      await db.execute('ALTER TABLE customers ADD COLUMN wallet_balance REAL NOT NULL DEFAULT 0');
+      console.log('✅ Added wallet_balance column to customers table');
+    } catch (e) { }
+
+    // Add wallet_redeemed to existing orders tables
+    try {
+      await db.execute('ALTER TABLE orders ADD COLUMN wallet_redeemed REAL NOT NULL DEFAULT 0');
+      console.log('✅ Added wallet_redeemed column to orders table');
+    } catch (e) { }
+
+    // Recalculate balance_amount for active orders to account for wallet_redeemed
+    try {
+      await db.execute("UPDATE orders SET balance_amount = MAX(0, total_amount - advance_paid - wallet_redeemed) WHERE status != 'Delivered'");
+      await db.execute("UPDATE orders SET balance_amount = 0 WHERE status = 'Delivered'");
+    } catch (e) { }
+
+    // Add image_type column to order_images (photo vs drawing)
+    try {
+      await db.execute("ALTER TABLE order_images ADD COLUMN image_type TEXT NOT NULL DEFAULT 'photo'");
+      console.log('✅ Added image_type column to order_images table');
+    } catch (e) { }
+
     console.log('✅ Database Initialized (' + (isLocal ? 'Local' : 'Cloud') + ')');
+
+    try { await db.execute('ALTER TABLE wallet_transactions ADD COLUMN expires_at TEXT'); } catch (e) { }
+
+    // Purge recycle bin snapshots after their 10-day recovery window.
+    try {
+      await db.execute("DELETE FROM deleted_orders WHERE deleted_at <= datetime('now', '-10 days', 'localtime')");
+    } catch (e) { console.error('Recycle bin cleanup failed:', e.message); }
+    setInterval(() => {
+      db.execute("DELETE FROM deleted_orders WHERE deleted_at <= datetime('now', '-10 days', 'localtime')")
+        .catch(e => console.error('Recycle bin cleanup failed:', e.message));
+    }, 24 * 60 * 60 * 1000);
 
     // Run storage cleanup for delivered bills older than 30 days
     setTimeout(() => {
@@ -224,6 +287,47 @@ async function initDB() {
     setInterval(() => {
       runStorageCleanup();
     }, 24 * 60 * 60 * 1000);
+
+    // ── Backfill cashback for old delivered orders ──────────────────────
+    // Runs once 8s after startup. Credits 5% (max ₹200) to every Delivered
+    // order that doesn't already have a CREDIT wallet_transaction entry.
+    setTimeout(async () => {
+      try {
+        const deliveredRs = await db.execute(
+          `SELECT o.order_id, o.customer_id, o.total_amount
+           FROM orders o
+           LEFT JOIN wallet_transactions wt
+             ON wt.order_id = o.order_id AND wt.type = 'CREDIT'
+           WHERE o.status = 'Delivered' AND wt.id IS NULL`
+        );
+        if (deliveredRs.rows.length === 0) {
+          console.log('🪙 Wallet backfill: no uncredited delivered orders found');
+          return;
+        }
+        console.log(`🪙 Wallet backfill: crediting cashback for ${deliveredRs.rows.length} old order(s)...`);
+        for (const row of deliveredRs.rows) {
+          const cashback = Math.min(
+            parseFloat((parseFloat(row.total_amount) * 0.03).toFixed(2)),
+            200
+          );
+          if (cashback <= 0) continue;
+          await db.execute({
+            sql: 'UPDATE customers SET wallet_balance = wallet_balance + ? WHERE id = ?',
+            args: [cashback, row.customer_id]
+          });
+          await db.execute({
+            sql: `INSERT INTO wallet_transactions (customer_id, order_id, type, amount, description)
+                  VALUES (?, ?, 'CREDIT', ?, ?)`,
+            args: [row.customer_id, row.order_id, cashback, `3% cashback on Order #${row.order_id} (max ₹200)`]
+          });
+          console.log(`  ✓ Order #${row.order_id} → ₹${cashback} credited`);
+        }
+        console.log('🪙 Wallet backfill complete');
+      } catch (e) {
+        console.error('Wallet backfill error:', e.message);
+      }
+    }, 8000);
+    // ────────────────────────────────────────────────────────────────────
 
   } catch (err) {
     console.error('❌ Database Initialization Error Details:', err);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Download, Share2, Printer, ChevronLeft, CheckCircle, Clock, Menu, Image as ImageIcon, X, Mic, Edit2 } from 'lucide-react';
 import QRCode from 'react-qr-code';
@@ -87,9 +87,8 @@ export default function BillPreview({ onMenuClick }) {
         try {
             await api.put(`/orders/${orderId}`, {
                 advance_paid: order.total_amount,
-                services: order.services // preserve services
+                services: order.services
             });
-            // Re-fetch to ensure all calculated fields (like balance) are fresh from DB
             const res = await api.get(`/orders/${orderId}`);
             setOrder(res.data);
             toast.success('Balance cleared successfully');
@@ -345,6 +344,12 @@ export default function BillPreview({ onMenuClick }) {
                                     <span style={{ color: '#2E7D32' }}>Advance Paid</span>
                                     <span style={{ color: '#2E7D32', fontWeight: 600 }}>{`- \u20b9${parseFloat(order.advance_paid).toFixed(2)}`}</span>
                                 </div>
+                                {order.wallet_redeemed > 0 && (
+                                    <div className="bill-total-row">
+                                        <span style={{ color: '#2E7D32' }}>🪙 Loyalty Wallet</span>
+                                        <span style={{ color: '#2E7D32', fontWeight: 600 }}>{`- \u20b9${parseFloat(order.wallet_redeemed).toFixed(2)}`}</span>
+                                    </div>
+                                )}
                                 <div className="gold-divider" style={{ margin: '8px 0' }} />
                                 <div className="bill-total-row highlight">
                                     <span>Balance Due</span>
@@ -386,6 +391,26 @@ export default function BillPreview({ onMenuClick }) {
                                 <div>Thank you for choosing LM Ladies Tailor!</div>
                                 <div style={{ marginTop: 3, fontSize: 10 }}>This is a computer-generated receipt. No signature required.</div>
                             </div>
+
+                            {/* ── Printable Photos (only photos, no drawings) ── */}
+                            {(() => {
+                                const photos = images.filter(img => (img.image_type || 'photo') !== 'drawing');
+                                if (photos.length === 0) return null;
+                                return (
+                                    <div className="print-photos-section" style={{ padding: '16px 20px', borderTop: '1px solid var(--gray-light)' }}>
+                                        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 13, fontWeight: 700, color: 'var(--maroon)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Reference Photos
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                            {photos.map(img => (
+                                                <div key={img.id} style={{ width: 120, height: 120, borderRadius: 6, overflow: 'hidden', border: '1px solid #ddd' }}>
+                                                    <img src={img.image_data} alt="Reference" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         {/* Attached Images (Not Printed) */}
@@ -479,6 +504,12 @@ export default function BillPreview({ onMenuClick }) {
                                     <span style={{ color: '#2E7D32', fontSize: 13 }}>Advance</span>
                                     <span style={{ color: '#2E7D32', fontWeight: 600 }}>{`\u20b9${parseFloat(order.advance_paid).toLocaleString('en-IN')}`}</span>
                                 </div>
+                                {parseFloat(order.wallet_redeemed) > 0 && (
+                                    <div className="flex-between" style={{ marginBottom: 8 }}>
+                                        <span style={{ color: '#2E7D32', fontSize: 13 }}>🪙 Wallet</span>
+                                        <span style={{ color: '#2E7D32', fontWeight: 600 }}>{`- \u20b9${parseFloat(order.wallet_redeemed).toLocaleString('en-IN')}`}</span>
+                                    </div>
+                                )}
                                 <div className="gold-divider" style={{ margin: '8px 0' }} />
                                 <div className="flex-between">
                                     <span style={{ fontWeight: 700 }}>Balance</span>
@@ -524,11 +555,15 @@ export default function BillPreview({ onMenuClick }) {
             </div>
 
             <style>{`
+        .print-photos-section { display: none; }
         @media print {
+          @page { size: A4 portrait; margin: 2%; }
           .no-print { display: none !important; }
           .main-content { margin-left: 0 !important; }
           .sidebar { display: none !important; }
           .page-container { padding: 0 !important; }
+          .bill-preview-layout { display: block !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+          .bill-preview-layout > div:first-child { width: 100% !important; max-width: none !important; flex: none !important; }
           .topbar { display: none !important; }
           body { 
             background: white !important; 
@@ -537,9 +572,15 @@ export default function BillPreview({ onMenuClick }) {
             text-rendering: optimizeLegibility !important;
             -webkit-font-smoothing: antialiased !important;
           }
-          .bill-preview { box-shadow: none !important; max-width: 100% !important; border: none !important; }
+          .bill-preview { box-sizing: border-box !important; box-shadow: none !important; width: 100% !important; max-width: none !important; border: none !important; border-radius: 0 !important; margin: 0 !important; }
+          .bill-preview * { page-break-inside: avoid; }
+          .print-photos-section { display: block !important; page-break-inside: avoid; }
+          .print-photos-section { display: block !important; page-break-inside: avoid; }
+          .print-photos-section img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
+
+
 
             {/* Image Preview Modal */}
             {previewImage && (

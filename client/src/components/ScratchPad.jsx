@@ -23,7 +23,7 @@ export default function ScratchPad({ onSave, onClose }) {
     const context = canvas.getContext('2d');
     context.scale(scale, scale);
     context.lineCap = 'round';
-    context.strokeStyle = color;
+    context.strokeStyle = 'black';
     context.lineWidth = 3;
     contextRef.current = context;
 

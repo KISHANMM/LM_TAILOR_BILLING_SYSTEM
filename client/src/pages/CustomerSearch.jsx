@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu, LayoutGrid, List, Trash2 } from 'lucide-react';
+import { Search, Phone, User, ShoppingBag, Plus, Eye, Ruler, Edit2, Check, X, Menu, LayoutGrid, List, Trash2, BookUser, Coins } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 import { searchOfflineCustomers, getOfflineCustomerById } from '../utils/offlineStore';
 
 const BLOUSE_LABELS = {
@@ -49,13 +50,29 @@ export default function CustomerSearch({ onMenuClick, auth }) {
     const [activeTab, setActiveTab] = useState('BLOUSE'); // 'BLOUSE' or 'CHUDHIDHAR'
     const location = useLocation();
 
-    useEffect(() => {
-        if (id) {
-            handleSelectById(id);
-        }
-    }, [id]);
+    // ── Contact Picker ────────────────────────────
+    const isContactPickerSupported = 'contacts' in navigator && 'ContactsManager' in window;
 
-    async function handleSelectById(cid) {
+    const importFromContacts = async () => {
+        if (!isContactPickerSupported) {
+            toast('Contact import is not supported on this browser.\nUse Android Chrome for this feature.', { icon: 'ℹ️', duration: 4000 });
+            return;
+        }
+        try {
+            const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+            if (contacts && contacts.length > 0) {
+                const { name, tel } = contacts[0];
+                const rawPhone = (tel?.[0] || '').replace(/[\s\-()]/g, '').replace(/^(\+91|0)/, '');
+                const importedPhone = rawPhone.slice(-10);
+                setQuery(importedPhone || name?.[0] || '');
+                if (selected) setSelected(null);
+            }
+        } catch {
+            // AbortError = user dismissed picker, silently ignore
+        }
+    };
+
+    const handleSelectById = useCallback(async (cid) => {
         setLoading(true);
         setActiveTab('BLOUSE');
         try {
@@ -87,7 +104,13 @@ export default function CustomerSearch({ onMenuClick, auth }) {
         } finally {
             setLoading(false);
         }
-    }
+    }, [location.state]);
+
+    useEffect(() => {
+        if (id) {
+            handleSelectById(id);
+        }
+    }, [id, handleSelectById]);
 
     const debouncedSearch = useCallback((q) => {
         const handler = setTimeout(async () => {
@@ -99,7 +122,9 @@ export default function CustomerSearch({ onMenuClick, auth }) {
             setLoading(true);
             setSearched(true);
             try {
-                const param = /^\\d+$/.test(q) ? `phone=${q}` : `name=${q}`;
+                const cleanPhone = q.trim().replace(/\D/g, '');
+                const isPhone = /^\d+$/.test(q.trim()) || (cleanPhone.length >= 3 && /^\+?\d[\d\s-]*$/.test(q.trim()));
+                const param = isPhone ? `phone=${encodeURIComponent(cleanPhone || q.trim())}` : `name=${encodeURIComponent(q.trim())}`;
                 const [apiRes, offlineRes] = await Promise.all([
                     api.get(`/customers/search?${param}`).catch(() => ({ data: [] })),
                     searchOfflineCustomers(q).catch(() => [])
@@ -138,7 +163,9 @@ export default function CustomerSearch({ onMenuClick, auth }) {
         setSelected(null);
         setSearched(true);
         try {
-            const param = /^\\d+$/.test(query) ? `phone=${query}` : `name=${query}`;
+            const cleanPhone = query.trim().replace(/\D/g, '');
+            const isPhone = /^\d+$/.test(query.trim()) || (cleanPhone.length >= 3 && /^\+?\d[\d\s-]*$/.test(query.trim()));
+            const param = isPhone ? `phone=${encodeURIComponent(cleanPhone || query.trim())}` : `name=${encodeURIComponent(query.trim())}`;
             const [apiRes, offlineRes] = await Promise.all([
                 api.get(`/customers/search?${param}`).catch(() => ({ data: [] })),
                 searchOfflineCustomers(query).catch(() => [])
@@ -312,6 +339,15 @@ export default function CustomerSearch({ onMenuClick, auth }) {
                                             autoFocus
                                         />
                                     </div>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline"
+                                        onClick={importFromContacts}
+                                        title="Import from phone contacts"
+                                        style={{ color: 'var(--maroon)', borderColor: 'var(--maroon)', whiteSpace: 'nowrap' }}
+                                    >
+                                        <BookUser size={16} /> <span className="hide-mobile">Import</span>
+                                    </button>
                                     <button type="submit" className="btn btn-primary" disabled={!query || loading} style={{ display: 'none' }}>
                                         {loading ? 'Searching…' : 'Search'}
                                     </button>
@@ -455,6 +491,38 @@ export default function CustomerSearch({ onMenuClick, auth }) {
                                                 <div style={{ fontSize: 11, color: 'var(--gray)', marginTop: 6 }}>
                                                     Customer since {formatDate(selected.created_at)}
                                                 </div>
+                                                {/* Wallet Balance — visible to Admin only */}
+                                                {isAdmin && (
+                                                    <div style={{
+                                                        marginTop: 12,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 8,
+                                                        background: parseFloat(selected.wallet_balance) > 0 ? 'linear-gradient(135deg, #E8F5E9, #F1F8E9)' : '#F5F5F5',
+                                                        border: `1px solid ${parseFloat(selected.wallet_balance) > 0 ? '#A5D6A7' : '#E0E0E0'}`,
+                                                        borderRadius: 10,
+                                                        padding: '8px 14px',
+                                                        width: '100%',
+                                                        boxSizing: 'border-box'
+                                                    }}>
+                                                        <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: parseFloat(selected.wallet_balance) > 0 ? '#D5EED8' : '#EAE7E2', color: parseFloat(selected.wallet_balance) > 0 ? '#2E7D32' : '#777' }}>
+                                                            <Coins size={19} strokeWidth={2.2} />
+                                                        </span>
+                                                        <div style={{ flex: 1 }}>
+                                                            <div style={{ fontSize: 11, color: parseFloat(selected.wallet_balance) > 0 ? '#388E3C' : 'var(--gray)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                                Loyalty Wallet
+                                                            </div>
+                                                            <div style={{ fontSize: 16, fontWeight: 700, color: parseFloat(selected.wallet_balance) > 0 ? '#2E7D32' : 'var(--gray)' }}>
+                                                                ₹{parseFloat(selected.wallet_balance || 0).toFixed(2)}
+                                                            </div>
+                                                        </div>
+                                                        {parseFloat(selected.wallet_balance) > 0 && (
+                                                            <span style={{ fontSize: 10, background: '#2E7D32', color: '#fff', borderRadius: 20, padding: '2px 8px', fontWeight: 600 }}>
+                                                                Redeemable
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </>
                                         )}
                                     </div>
@@ -628,7 +696,7 @@ export default function CustomerSearch({ onMenuClick, auth }) {
                                                                     />
                                                                 )
                                                             ) : (
-                                                                <strong style={{ fontSize: 13 }}>{values[key] != null && values[key] !== '' ? `${values[key]}"` : '-'}</strong>
+                                                                <strong style={{ fontSize: 13 }}>{values[key] != null && values[key] !== '' ? values[key] : '-'}</strong>
                                                             )}
                                                         </div>
                                                     ))}
