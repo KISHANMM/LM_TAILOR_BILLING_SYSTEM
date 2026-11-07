@@ -1,0 +1,52 @@
+=======================================================
+L.M. TAILOR BILLING SYSTEM - DEPLOYMENT & UPDATE GUIDE
+=======================================================
+
+This guide explains how to properly update your live application on Vercel and ensure your security settings are active.
+
+-------------------------------------------------------
+STEP 1: ADDING/UPDATING ENVIRONMENT VARIABLES IN VERCEL
+-------------------------------------------------------
+You only need to do this step once per new variable, or if you want to change your password in the future!
+
+1. Log into your Vercel Account.
+2. Go to the 'lm-tailor-billing-system' Project Dashboard.
+3. Click on the "Settings" tab at the top.
+4. On the left sidebar, click "Environment Variables".
+5. Add your Admin Password:
+   - Key: ADMIN_PASSWORD
+   - Value: [Type your desired secure password here]
+   - Click the black "Add Environment Variable" or "Save" button.
+
+6. Add your Secure Session Key (Mandatory for high security):
+   - Key: JWT_SECRET
+   - Value: [Type a long random string, e.g., MySuperSecretLMTailorKey2026!]
+   - Click the "Add Environment Variable" or "Save" button.
+
+-------------------------------------------------------
+STEP 2: PUSHING YOUR CODE UPDATES
+-------------------------------------------------------
+1. Push your latest code changes from your computer to your connected GitHub/GitLab repository.
+2. Vercel is usually set to automatically build and deploy new code when you push to the 'main' branch on GitHub.
+
+-------------------------------------------------------
+STEP 3: REDEPLOYING (If adding new Environment Variables)
+-------------------------------------------------------
+If you just pushed new code, Vercel will automatically redeploy. HOWEVER, if you ONLY added/changed Environment Variables (like changing your ADMIN_PASSWORD) and didn't change any code, you must manually restart Vercel for it to pick up the new password:
+
+1. In Vercel, go to the "Deployments" tab.
+2. Find the topmost deployment (the most recent one).
+3. Click the 3 dots (...) on the right side of that row.
+4. Click "Redeploy".
+5. Uncheck "Use Build Cache" (if the option pops up) and confirm.
+
+-------------------------------------------------------
+STEP 4: VERIFICATION
+-------------------------------------------------------
+1. Once the deployment says "Ready", open your live website link.
+2. Because of the new security updates, you will automatically be asked to log in.
+3. Type in the newly set ADMIN_PASSWORD. 
+4. Your data (Customers, Orders, Alterations) will all be there, perfectly safe!
+
+=======================================================
+Note: Your database data (Turso/LibSQL) is completely separate from Vercel deployments. Deploying updates will NEVER erase your database!

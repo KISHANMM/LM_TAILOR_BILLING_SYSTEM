@@ -116,10 +116,31 @@ export default function BillPreview({ onMenuClick }) {
         }, 1000);
     }
 
-    function handleWhatsApp() {
+    async function handleWhatsApp() {
         if (!order) return;
         let phoneForUrl = order.phone_number.replace(/\D/g, '');
         if (phoneForUrl.length === 10) phoneForUrl = '91' + phoneForUrl;
+
+        // New cashback for this order: 3% of total, max ₹200
+        const cashback = Math.min(parseFloat((parseFloat(order.total_amount) * 0.03).toFixed(2)), 200);
+
+        // Fetch existing wallet balance (old credits from previous orders)
+        let oldWalletBalance = 0;
+        if (order.customer_id) {
+            try {
+                const walletRes = await api.get(`/customers/${order.customer_id}/wallet`);
+                oldWalletBalance = parseFloat(walletRes.data.wallet_balance) || 0;
+            } catch {
+                // If fetch fails, just proceed without old balance
+            }
+        }
+
+        const totalAfterCredit = parseFloat((oldWalletBalance + cashback).toFixed(2));
+
+        const walletLine = oldWalletBalance > 0
+            ? `Your profile will be credited with *\u20b9${cashback.toFixed(2)}* after delivery of this order.\n` +
+              `\ud83d\udcb0 *Total Wallet Balance: \u20b9${totalAfterCredit.toFixed(2)}* _(includes previous balance of \u20b9${oldWalletBalance.toFixed(2)})_\n`
+            : `Your profile will be credited with *\u20b9${cashback.toFixed(2)}* after delivery of this order.\n`;
 
         const msg = encodeURIComponent(
             `*LM Ladies Tailor - Bill*\n\n` +
@@ -133,6 +154,10 @@ export default function BillPreview({ onMenuClick }) {
             `\n\n*Total: \u20b9${parseFloat(order.total_amount).toFixed(2)}*\n` +
             `Advance Paid: \u20b9${parseFloat(order.advance_paid).toFixed(2)}\n` +
             `*Balance Due: \u20b9${parseFloat(order.balance_amount).toFixed(2)}*\n\n` +
+            `\ud83e\ude99 *Loyalty Wallet Offer!*\n` +
+            walletLine +
+            `This amount can be used as a discount on your *next order* with us! \ud83c\udf89\n` +
+            `_(Valid for 2 months from delivery date)_\n\n` +
             `*Note: We are not responsible for clothes left over 3 months.*\n\n` +
             `_LM Ladies Tailor | Dajibanpeth, Beside Ganesh Temple, Hubli | 9916562127_`
         );
